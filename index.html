@@ -1,0 +1,2293 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestione & Localizzazione Palmari - Logistica</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Inter & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Leaflet CSS & JS per mappa reale GPS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f1f5f9;
+            color: #0f172a;
+        }
+        .font-mono-code {
+            font-family: 'JetBrains Mono', monospace;
+        }
+        /* Animazione lampeggiante per allarme dispositivo */
+        @keyframes pulse-alarm {
+            0%, 100% {
+                background-color: #dc2626;
+                transform: scale(1);
+            }
+            50% {
+                background-color: #991b1b;
+                transform: scale(1.01);
+            }
+        }
+        .alarm-flash {
+            animation: pulse-alarm 0.8s infinite ease-in-out;
+        }
+        /* Marker pulsante sulla pianta magazzino */
+        @keyframes ping-slow {
+            75%, 100% {
+                transform: scale(2);
+                opacity: 0;
+            }
+        }
+        .animate-ping-slow {
+            animation: ping-slow 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #e2e8f0;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #94a3b8;
+            border-radius: 9999px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
+        /* Fix z-index leaflet */
+        .leaflet-container {
+            z-index: 10 !important;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <!-- SCHERMATA OVERLAY ALLARME SONORO (Modalità Palmare quando ringing === true) -->
+    <div id="alarm-fullscreen-overlay" class="hidden fixed inset-0 z-50 alarm-flash text-white flex flex-col items-center justify-center p-6 text-center select-none">
+        <div class="bg-white/20 p-6 rounded-full mb-6 animate-bounce">
+            <i data-lucide="volume-2" class="w-20 h-20 text-white"></i>
+        </div>
+        <span class="px-4 py-1.5 bg-black/40 rounded-full text-sm font-mono-code uppercase tracking-widest mb-3">
+            SEGNALE ACUSTICO REMOTO ATTIVO
+        </span>
+        <h1 class="text-3xl sm:text-5xl font-extrabold tracking-tight mb-2">
+            RICERCA DISPOSITIVO IN CORSO
+        </h1>
+        <p id="alarm-device-label" class="text-xl sm:text-2xl font-semibold text-red-100 mb-8">
+            Palmare #01 - Mario Rossi
+        </p>
+        <p class="max-w-md text-red-100 text-sm sm:text-base mb-10">
+            La centrale operativa (logistica@candida.it) ha attivato la ricerca sonora per questo terminale.
+        </p>
+        <button id="btn-stop-alarm-client" onclick="stopAlarmFromClient()" class="w-full max-w-md bg-white text-red-700 hover:bg-red-50 active:scale-95 transition font-extrabold text-xl py-5 px-8 rounded-2xl shadow-2xl flex items-center justify-center gap-3 cursor-pointer">
+            <i data-lucide="bell-off" class="w-7 h-7"></i>
+            HO TROVATO IL PALMARE - SPEGNI ALLARME
+        </button>
+    </div>
+
+    <!-- HEADER PRINCIPALE -->
+    <header class="bg-slate-900 text-white shadow-lg border-b border-slate-800 sticky top-0 z-30">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                <!-- Logo & Titolo -->
+                <div class="flex items-center gap-3">
+                    <div class="bg-amber-500 text-slate-950 p-2.5 rounded-xl shadow-md">
+                        <i data-lucide="smartphone-nfc" class="w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <h1 class="text-lg sm:text-xl font-extrabold tracking-tight text-white">
+                                Candida Logistica - Gestione Palmari
+                            </h1>
+                            <button onclick="openFirebaseConfigModal()" id="db-status-badge" title="Stato sincronizzazione database" class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/30 transition cursor-pointer">
+                                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                                Cloud Live Sincronizzato
+                            </button>
+                            <span id="role-badge" class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                                <i data-lucide="user-check" class="w-3 h-3"></i>
+                                Ruolo: Logistica
+                            </span>
+                        </div>
+                        <div class="flex items-center gap-2 text-xs text-slate-400 mt-0.5 flex-wrap">
+                            <i data-lucide="shield-check" class="w-3.5 h-3.5 text-amber-400"></i>
+                            <span>Account:</span>
+                            <strong id="active-account-label" class="text-amber-300 font-mono-code">logistica@candida.it</strong>
+                            <span class="text-slate-600">•</span>
+                            <button id="header-cloud-btn" onclick="openFirebaseConfigModal()" class="hidden text-amber-400 hover:text-amber-300 underline font-semibold cursor-pointer">
+                                Configura Cloud & Link Palmari
+                            </button>
+                            <button onclick="openRoleModal()" class="text-slate-300 hover:text-white underline font-semibold cursor-pointer">
+                                Cambia Profilo / Accesso Admin
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Selettore Modalità / Profilo -->
+                <div class="flex items-center gap-2 self-start md:self-auto flex-wrap">
+                    <button id="header-gear-btn" onclick="openFirebaseConfigModal()" title="Configurazione Firebase & Sicurezza PIN (Solo Admin)" class="hidden p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-400 border border-slate-700 transition cursor-pointer">
+                        <i data-lucide="cloud-cog" class="w-4 h-4"></i>
+                    </button>
+                    <div class="flex items-center bg-slate-800 p-1 rounded-xl border border-slate-700">
+                        <button id="mode-logistics-btn" onclick="switchRole('logistics')" class="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition bg-amber-500 text-slate-950 shadow cursor-pointer">
+                            <i data-lucide="radio" class="w-3.5 h-3.5"></i>
+                            <span>Logistica</span>
+                        </button>
+                        <button id="mode-superadmin-btn" onclick="requestSuperAdminAccess()" class="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition text-slate-300 hover:text-white cursor-pointer">
+                            <i data-lucide="shield" class="w-3.5 h-3.5"></i>
+                            <span>Admin</span>
+                        </button>
+                        <button id="mode-client-btn" onclick="switchRole('client')" class="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition text-slate-300 hover:text-white cursor-pointer">
+                            <i data-lucide="smartphone" class="w-3.5 h-3.5"></i>
+                            <span>Palmare</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- NOTIFICA TOAST CUSTOM (Sostituisce alert) -->
+    <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none px-4 sm:px-0"></div>
+
+    <!-- ===================================================================== -->
+    <!-- VISTA 1: MODALITÀ CENTRALE OPERATIVA (ADMIN)                          -->
+    <!-- ===================================================================== -->
+    <main id="admin-view" class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+        <!-- KPI / Statistiche Rapide -->
+        <section class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="bg-white rounded-2xl p-4 sm:p-5 shadow-sm border border-slate-200 flex items-center justify-between">
+                <div>
+                    <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Totale Palmari</p>
+                    <p id="stat-total" class="text-2xl sm:text-3xl font-extrabold text-slate-900 mt-1">0</p>
+                    <p class="text-xs text-slate-400 mt-1">Flotta logistica</p>
+                </div>
+                <div class="p-3 bg-slate-100 text-slate-700 rounded-xl">
+                    <i data-lucide="smartphone" class="w-6 h-6"></i>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-2xl p-4 sm:p-5 shadow-sm border border-slate-200 flex items-center justify-between">
+                <div>
+                    <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Online / Attivi</p>
+                    <p id="stat-online" class="text-2xl sm:text-3xl font-extrabold text-emerald-600 mt-1">0</p>
+                    <p class="text-xs text-emerald-600/80 mt-1">Segnale GPS/Wi-Fi OK</p>
+                </div>
+                <div class="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
+                    <i data-lucide="wifi" class="w-6 h-6"></i>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-2xl p-4 sm:p-5 shadow-sm border border-slate-200 flex items-center justify-between">
+                <div>
+                    <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Assegnati</p>
+                    <p id="stat-assigned" class="text-2xl sm:text-3xl font-extrabold text-blue-600 mt-1">0</p>
+                    <p id="stat-available" class="text-xs text-slate-400 mt-1">0 disponibili</p>
+                </div>
+                <div class="p-3 bg-blue-50 text-blue-600 rounded-xl">
+                    <i data-lucide="user-check" class="w-6 h-6"></i>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-2xl p-4 sm:p-5 shadow-sm border border-slate-200 flex items-center justify-between">
+                <div>
+                    <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">In Allarme Suono</p>
+                    <p id="stat-ringing" class="text-2xl sm:text-3xl font-extrabold text-red-600 mt-1">0</p>
+                    <p class="text-xs text-red-500 mt-1">Ricerca attiva</p>
+                </div>
+                <div class="p-3 bg-red-50 text-red-600 rounded-xl">
+                    <i data-lucide="bell-ring" class="w-6 h-6"></i>
+                </div>
+            </div>
+        </section>
+
+        <!-- Barra Azioni, Ricerca e Filtri -->
+        <section class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 flex flex-col lg:flex-row gap-3 items-stretch lg:items-center justify-between">
+            <div class="flex flex-col sm:flex-row gap-3 flex-1">
+                <!-- Ricerca -->
+                <div class="relative flex-1">
+                    <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2"></i>
+                    <input id="search-input" type="text" oninput="renderAll()" placeholder="Cerca palmare, seriale, operatore o reparto..." class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500">
+                </div>
+                <!-- Filtro Stato -->
+                <select id="filter-status" onchange="renderAll()" class="px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-500">
+                    <option value="all">Tutti gli stati</option>
+                    <option value="online">Solo Online</option>
+                    <option value="offline">Solo Offline</option>
+                    <option value="ringing">In Allarme Suono</option>
+                    <option value="assigned">Assegnati ad Operatore</option>
+                    <option value="available">Disponibili / Non assegnati</option>
+                </select>
+                <!-- Filtro Reparto -->
+                <select id="filter-dept" onchange="renderAll()" class="px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-500">
+                    <option value="all">Tutti i reparti</option>
+                    <option value="Spedizioni">Spedizioni</option>
+                    <option value="Ricevimento">Ricevimento</option>
+                    <option value="Picking">Picking</option>
+                    <option value="Carico/Scarico">Carico/Scarico</option>
+                    <option value="Controllo Qualità">Controllo Qualità</option>
+                </select>
+            </div>
+
+            <div id="admin-only-actions" class="hidden flex items-center gap-2 flex-wrap">
+                <button onclick="resetToOfficialEleven()" title="Ripristina i 11 palmari aziendali ufficiali" class="px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl text-sm transition flex items-center gap-2 cursor-pointer">
+                    <i data-lucide="rotate-ccw" class="w-4 h-4 text-slate-600"></i>
+                    <span>Ripristina 11 Palmari</span>
+                </button>
+                <button onclick="openNewDeviceModal()" class="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-semibold rounded-xl text-sm shadow-sm transition flex items-center gap-2 cursor-pointer">
+                    <i data-lucide="plus-circle" class="w-4 h-4 text-amber-400"></i>
+                    <span>+ Nuovo Palmare</span>
+                </button>
+            </div>
+        </section>
+
+        <!-- GRIGLIA PRINCIPALE: LISTA PALMARI (Sinistra) + MAPPA INTERATTIVA (Destra) -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            
+            <!-- COLONNA SINISTRA: Elenco Palmari (5 colonne su desktop) -->
+            <div class="lg:col-span-5 space-y-3">
+                <div class="flex items-center justify-between px-1">
+                    <h2 class="text-sm font-bold uppercase tracking-wider text-slate-600 flex items-center gap-2">
+                        <i data-lucide="list" class="w-4 h-4"></i>
+                        Dispositivi Registrati (<span id="filtered-count">0</span>)
+                    </h2>
+                    <span class="text-xs text-slate-400">Clicca per localizzare</span>
+                </div>
+
+                <div id="devices-list-container" class="space-y-3 max-h-[680px] overflow-y-auto pr-1">
+                    <!-- Popolato dinamicamente via JS -->
+                </div>
+            </div>
+
+            <!-- COLONNA DESTRA: Localizzazione su Mappa / Pianta Magazzino (7 colonne su desktop) -->
+            <div class="lg:col-span-7 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+                <!-- Header Mappa con selettore vista -->
+                <div class="p-4 border-b border-slate-200 bg-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                        <h2 class="font-bold text-slate-900 flex items-center gap-2">
+                            <i data-lucide="map-pin" class="w-5 h-5 text-amber-500"></i>
+                            Localizzazione in Tempo Reale
+                        </h2>
+                        <p class="text-xs text-slate-500">Tracciamento indoor (Wi-Fi/Beacon) ed esterno (GPS)</p>
+                    </div>
+
+                    <!-- Switch Pianta Magazzino / Mappa GPS -->
+                    <div class="flex bg-slate-200/80 p-1 rounded-xl self-start sm:self-auto">
+                        <button id="view-warehouse-btn" onclick="switchMapType('warehouse')" class="px-3 py-1.5 rounded-lg text-xs font-bold transition bg-white text-slate-900 shadow-sm flex items-center gap-1.5 cursor-pointer">
+                            <i data-lucide="warehouse" class="w-3.5 h-3.5 text-amber-600"></i>
+                            Pianta Magazzino
+                        </button>
+                        <button id="view-gps-btn" onclick="switchMapType('gps')" class="px-3 py-1.5 rounded-lg text-xs font-bold transition text-slate-600 hover:text-slate-900 flex items-center gap-1.5 cursor-pointer">
+                            <i data-lucide="globe" class="w-3.5 h-3.5 text-blue-600"></i>
+                            Mappa GPS
+                        </button>
+                    </div>
+                </div>
+
+                <!-- CONTENITORE 1: PIANTA MAGAZZINO INTERATTIVA (SVG/HTML) -->
+                <div id="warehouse-map-container" class="relative w-full h-[460px] bg-slate-900 overflow-hidden select-none">
+                    <!-- Griglia architettonica magazzino -->
+                    <svg class="w-full h-full" viewBox="0 0 800 500" preserveAspectRatio="none">
+                        <defs>
+                            <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+                                <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e293b" stroke-width="1"/>
+                            </pattern>
+                        </defs>
+                        <rect width="800" height="500" fill="#0f172a"/>
+                        <rect width="800" height="500" fill="url(#grid)"/>
+
+                        <!-- Perimetro Magazzino Candida Logistica -->
+                        <rect x="20" y="20" width="760" height="460" rx="12" fill="none" stroke="#475569" stroke-width="3"/>
+
+                        <!-- ZONA 1: CORSIA A (Scaffalature Alta Rotazione) -->
+                        <rect x="45" y="45" width="160" height="260" rx="8" fill="#1e293b" stroke="#334155" stroke-width="2"/>
+                        <rect x="65" y="75" width="45" height="200" rx="4" fill="#334155"/>
+                        <rect x="140" y="75" width="45" height="200" rx="4" fill="#334155"/>
+                        <text x="125" y="65" fill="#94a3b8" font-size="12" font-weight="bold" text-anchor="middle">CORSIA A (Picking)</text>
+
+                        <!-- ZONA 2: CORSIA B (Scaffalature Pallet) -->
+                        <rect x="230" y="45" width="160" height="260" rx="8" fill="#1e293b" stroke="#334155" stroke-width="2"/>
+                        <rect x="250" y="75" width="45" height="200" rx="4" fill="#334155"/>
+                        <rect x="325" y="75" width="45" height="200" rx="4" fill="#334155"/>
+                        <text x="310" y="65" fill="#94a3b8" font-size="12" font-weight="bold" text-anchor="middle">CORSIA B (Pallet)</text>
+
+                        <!-- ZONA 3: CORSIA C (Stoccaggio & Inventario) -->
+                        <rect x="415" y="45" width="150" height="260" rx="8" fill="#1e293b" stroke="#334155" stroke-width="2"/>
+                        <rect x="435" y="75" width="40" height="200" rx="4" fill="#334155"/>
+                        <rect x="505" y="75" width="40" height="200" rx="4" fill="#334155"/>
+                        <text x="490" y="65" fill="#94a3b8" font-size="12" font-weight="bold" text-anchor="middle">CORSIA C (Stock)</text>
+
+                        <!-- ZONA 4: UFFICIO SPEDIZIONI & RICARICA PALMARI -->
+                        <rect x="590" y="45" width="165" height="145" rx="8" fill="#1e3a8a" fill-opacity="0.35" stroke="#3b82f6" stroke-width="2"/>
+                        <text x="672" y="72" fill="#93c5fd" font-size="12" font-weight="bold" text-anchor="middle">UFFICIO SPEDIZIONI</text>
+                        <text x="672" y="90" fill="#60a5fa" font-size="10" text-anchor="middle">Dock Ricarica Palmari</text>
+
+                        <!-- ZONA 5: RICEVIMENTO MERCI -->
+                        <rect x="590" y="210" width="165" height="95" rx="8" fill="#065f46" fill-opacity="0.35" stroke="#10b981" stroke-width="2"/>
+                        <text x="672" y="238" fill="#6ee7b7" font-size="12" font-weight="bold" text-anchor="middle">RICEVIMENTO MERCI</text>
+                        <text x="672" y="255" fill="#34d399" font-size="10" text-anchor="middle">Controllo Ingresso</text>
+
+                        <!-- ZONA 6: BAIA DI CARICO / RIBALTE TIR -->
+                        <rect x="45" y="330" width="710" height="125" rx="8" fill="#78350f" fill-opacity="0.3" stroke="#f59e0b" stroke-width="2" stroke-dasharray="6 4"/>
+                        <text x="400" y="355" fill="#fcd34d" font-size="13" font-weight="bold" text-anchor="middle">BAIA DI CARICO & RIBALTE SPEDIZIONE</text>
+                        <!-- Ribalte -->
+                        <rect x="80" y="425" width="90" height="30" rx="4" fill="#b45309"/>
+                        <text x="125" y="444" fill="#fff" font-size="10" font-weight="bold" text-anchor="middle">RIBALTA 1</text>
+                        <rect x="230" y="425" width="90" height="30" rx="4" fill="#b45309"/>
+                        <text x="275" y="444" fill="#fff" font-size="10" font-weight="bold" text-anchor="middle">RIBALTA 2</text>
+                        <rect x="380" y="425" width="90" height="30" rx="4" fill="#b45309"/>
+                        <text x="425" y="444" fill="#fff" font-size="10" font-weight="bold" text-anchor="middle">RIBALTA 3</text>
+                        <rect x="530" y="425" width="90" height="30" rx="4" fill="#b45309"/>
+                        <text x="575" y="444" fill="#fff" font-size="10" font-weight="bold" text-anchor="middle">RIBALTA 4</text>
+                    </svg>
+
+                    <!-- Layer Marker Palmari sovrapposti alla Pianta Magazzino -->
+                    <div id="warehouse-markers-layer" class="absolute inset-0">
+                        <!-- Marker generati dinamicamente -->
+                    </div>
+                </div>
+
+                <!-- CONTENITORE 2: MAPPA GEOGRAFICA GPS (Leaflet) -->
+                <div id="gps-map-container" class="hidden relative w-full h-[460px] bg-slate-200">
+                    <div id="leaflet-map" class="w-full h-full"></div>
+                </div>
+
+                <!-- DETTAGLIO TELEMETRIA PALMARE SELEZIONATO -->
+                <div id="selected-device-telemetry" class="p-4 bg-slate-50 border-t border-slate-200">
+                    <!-- Popolato dinamicamente quando un palmare è selezionato -->
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- ===================================================================== -->
+    <!-- VISTA 2: MODALITÀ TERMINALE PALMARE (CLIENT DISPOSITIVO)              -->
+    <!-- ===================================================================== -->
+    <main id="client-view" class="hidden flex-1 max-w-xl w-full mx-auto px-4 py-6 space-y-5">
+        <div class="bg-slate-900 text-white rounded-2xl p-5 shadow-lg border border-slate-800">
+            <div class="flex items-center justify-between mb-3 gap-2 flex-wrap">
+                <span class="px-2.5 py-1 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
+                    <i data-lucide="lock" class="w-3.5 h-3.5"></i>
+                    Terminale Palmare Protetto
+                </span>
+                <button onclick="requestUnlockClientMode()" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer">
+                    <i data-lucide="key-round" class="w-3.5 h-3.5 text-amber-400"></i>
+                    <span>Esci (PIN Admin)</span>
+                </button>
+            </div>
+            <h2 class="text-xl font-extrabold">Terminale Operativo Magazzino</h2>
+            <p class="text-xs sm:text-sm text-slate-300 mt-1">
+                Dispositivo collegato a <strong>logistica@candida.it</strong>. Rimane in ascolto dei segnali sonori della centrale e trasmette posizione GPS e batteria in tempo reale.
+            </p>
+
+            <!-- Selettore Palmare Impersonato -->
+            <div class="mt-4">
+                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
+                    Identità Terminale Assegnata:
+                </label>
+                <select id="client-device-selector" onchange="selectClientDevice(this.value)" class="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-4 py-3 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-amber-500">
+                    <!-- Popolato dinamicamente -->
+                </select>
+            </div>
+        </div>
+
+        <!-- Scheda Stato Terminale Selezionato -->
+        <div id="client-device-card" class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 space-y-5">
+            <!-- Popolato dinamicamente -->
+        </div>
+
+        <!-- Selezione Manuale Zona Magazzino dal Palmare -->
+        <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 space-y-3">
+            <div class="flex items-center justify-between">
+                <h3 class="text-sm font-bold uppercase tracking-wider text-slate-600">Posizione Indoor Magazzino</h3>
+                <span id="client-gps-badge" class="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+                    GPS Live Attivo
+                </span>
+            </div>
+            <p class="text-xs text-slate-500">Aggiorna la tua corsia/reparto se lavori al coperto senza segnale satellitare:</p>
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                <button onclick="updateClientZone('Corsia A')" class="py-2 px-3 bg-slate-100 hover:bg-amber-100 hover:text-amber-900 text-slate-700 font-semibold rounded-xl text-xs transition cursor-pointer">Corsia A</button>
+                <button onclick="updateClientZone('Corsia B')" class="py-2 px-3 bg-slate-100 hover:bg-amber-100 hover:text-amber-900 text-slate-700 font-semibold rounded-xl text-xs transition cursor-pointer">Corsia B</button>
+                <button onclick="updateClientZone('Corsia C')" class="py-2 px-3 bg-slate-100 hover:bg-amber-100 hover:text-amber-900 text-slate-700 font-semibold rounded-xl text-xs transition cursor-pointer">Corsia C</button>
+                <button onclick="updateClientZone('Baia di Carico')" class="py-2 px-3 bg-slate-100 hover:bg-amber-100 hover:text-amber-900 text-slate-700 font-semibold rounded-xl text-xs transition cursor-pointer">Baia di Carico</button>
+                <button onclick="updateClientZone('Ricevimento Merci')" class="py-2 px-3 bg-slate-100 hover:bg-amber-100 hover:text-amber-900 text-slate-700 font-semibold rounded-xl text-xs transition cursor-pointer">Ricevimento Merci</button>
+                <button onclick="updateClientZone('Ufficio Spedizioni')" class="py-2 px-3 bg-slate-100 hover:bg-amber-100 hover:text-amber-900 text-slate-700 font-semibold rounded-xl text-xs transition cursor-pointer">Ufficio Spedizioni</button>
+            </div>
+        </div>
+
+        <!-- Azioni Rapide dal Palmare -->
+        <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 space-y-3">
+            <h3 class="text-sm font-bold uppercase tracking-wider text-slate-600">Telemetria & Sblocco Audio Android</h3>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button onclick="sendRealGpsFromClient()" class="py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl text-sm flex items-center justify-center gap-2 shadow-sm transition cursor-pointer">
+                    <i data-lucide="navigation" class="w-4 h-4"></i>
+                    Forza Invio GPS Reale
+                </button>
+                <button onclick="testClientAudio()" class="py-3 px-4 bg-slate-900 hover:bg-slate-800 text-white font-semibold rounded-xl text-sm flex items-center justify-center gap-2 shadow-sm transition cursor-pointer">
+                    <i data-lucide="volume-2" class="w-4 h-4 text-amber-400"></i>
+                    Test Audio / Sblocca Sirena
+                </button>
+            </div>
+            <p class="text-xs text-slate-400 text-center pt-1">
+                Premi "Test Audio" all'inizio del turno per autorizzare Chrome Android a suonare al massimo volume anche a schermo inattivo.
+            </p>
+        </div>
+    </main>
+
+    <!-- ===================================================================== -->
+    <!-- MODALE: CONFIGURAZIONE FIREBASE CLOUD, PIN & LINK RAPIDO PALMARI      -->
+    <!-- ===================================================================== -->
+    <div id="modal-firebase-config" class="hidden fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden">
+            <div class="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
+                <h3 class="font-bold text-lg flex items-center gap-2">
+                    <i data-lucide="cloud-cog" class="w-5 h-5 text-amber-400"></i>
+                    Pannello Amministratore: Cloud & Sicurezza
+                </h3>
+                <button onclick="closeModal('modal-firebase-config')" class="text-slate-400 hover:text-white cursor-pointer">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div class="p-6 space-y-4 max-h-[85vh] overflow-y-auto">
+                <!-- Stato Connessione e Login Google -->
+                <div class="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Stato Connessione Cloud</span>
+                        <span id="modal-cloud-status" class="text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700">Attivo</span>
+                    </div>
+                    <p id="modal-auth-user" class="text-xs text-slate-600">
+                        Amministratore Supremo: <strong>leandrofucci@candida.it</strong>
+                    </p>
+                    <div class="flex flex-wrap gap-2">
+                        <button type="button" onclick="signInWithGoogleAccount()" class="flex-1 py-2.5 px-4 bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 font-bold rounded-xl text-xs sm:text-sm shadow-sm transition flex items-center justify-center gap-2 cursor-pointer">
+                            <i data-lucide="log-in" class="w-4 h-4 text-blue-600"></i>
+                            <span>Accedi con Google</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Link Rapido Pre-Configurato per i Palmari -->
+                <div class="p-4 bg-amber-50 rounded-xl border border-amber-200 space-y-2">
+                    <h4 class="text-xs font-extrabold uppercase tracking-wider text-amber-900 flex items-center gap-1.5">
+                        <i data-lucide="share-2" class="w-4 h-4 text-amber-600"></i>
+                        Link Diretto Pre-Configurato per PC Logistica e Palmari
+                    </h4>
+                    <p class="text-xs text-amber-800">
+                        Dopo aver salvato il <code>firebaseConfig</code> qui sotto, copia questo link: contiene già le chiavi cloud così non dovrai incollarle manualmente sugli 11 palmari.
+                    </p>
+                    <div class="flex gap-2">
+                        <input id="shareable-setup-url" type="text" readonly class="flex-1 px-3 py-2 bg-white border border-amber-300 rounded-xl text-xs font-mono-code text-slate-700">
+                        <button type="button" onclick="copyShareableSetupUrl()" class="px-3.5 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-xs transition cursor-pointer shrink-0">
+                            Copia Link
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Gestione PIN Amministratore -->
+                <div class="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                    <label class="block text-xs font-bold text-slate-700 uppercase">
+                        PIN Amministratore Supremo (Default: 1234)
+                    </label>
+                    <div class="flex gap-2">
+                        <input id="admin-pin-input" type="password" maxlength="8" placeholder="Nuovo PIN (es. 1234)" class="flex-1 px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm font-mono-code">
+                        <button type="button" onclick="updateAdminPin()" class="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs transition cursor-pointer">
+                            Aggiorna PIN
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Configurazione Firebase JSON -->
+                <form onsubmit="saveCustomFirebaseConfig(event)" class="space-y-3">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 uppercase mb-1">
+                            Configurazione Progetto Firebase (JSON)
+                        </label>
+                        <p class="text-xs text-slate-500 mb-2">
+                            Incolla qui l'oggetto <code class="bg-slate-100 px-1 rounded">firebaseConfig</code> della tua console Firebase per sincronizzare in tempo reale PC Centrale e tutti gli 11 palmari.
+                        </p>
+                        <textarea id="firebase-config-input" rows="5" placeholder='{"apiKey": "AIzaSy...", "authDomain": "tuo-progetto.firebaseapp.com", "projectId": "tuo-progetto", "storageBucket": "...", "messagingSenderId": "...", "appId": "..."}' class="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-mono-code focus:ring-2 focus:ring-amber-500 focus:outline-none"></textarea>
+                    </div>
+
+                    <div class="flex items-center justify-between gap-2 pt-2">
+                        <button type="button" onclick="clearCustomFirebaseConfig()" class="px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 rounded-xl cursor-pointer">
+                            Ripristina Default
+                        </button>
+                        <div class="flex gap-2">
+                            <button type="button" onclick="closeModal('modal-firebase-config')" class="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer">
+                                Chiudi
+                            </button>
+                            <button type="submit" class="px-4 py-2 text-xs font-bold bg-amber-500 hover:bg-amber-600 text-slate-950 rounded-xl shadow cursor-pointer">
+                                Salva & Connetti Cloud
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- MODALE: VERIFICA PIN AMMINISTRATORE                                   -->
+    <!-- ===================================================================== -->
+    <div id="modal-pin-verify" class="hidden fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-sm w-full shadow-2xl border border-slate-200 overflow-hidden">
+            <div class="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
+                <h3 class="font-bold text-base flex items-center gap-2">
+                    <i data-lucide="shield-alert" class="w-5 h-5 text-amber-400"></i>
+                    Accesso Amministratore Supremo
+                </h3>
+                <button onclick="closeModal('modal-pin-verify')" class="text-slate-400 hover:text-white cursor-pointer">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <form onsubmit="submitPinVerification(event)" class="p-6 space-y-4">
+                <p id="pin-modal-desc" class="text-xs sm:text-sm text-slate-600">
+                    Inserisci il PIN dell'Amministratore Supremo (<strong>leandrofucci@candida.it</strong>) per sbloccare questa funzione.
+                </p>
+                <input type="hidden" id="pin-action-target" value="superadmin">
+                <div>
+                    <input id="pin-verify-input" type="password" inputmode="numeric" required placeholder="••••" class="w-full px-4 py-3 text-center text-2xl tracking-widest font-mono-code border border-slate-300 rounded-xl focus:ring-2 focus:ring-amber-500 focus:outline-none">
+                    <p class="text-[11px] text-slate-400 text-center mt-1.5">PIN predefinito iniziale: 1234</p>
+                </div>
+                <div class="flex justify-end gap-2">
+                    <button type="button" onclick="closeModal('modal-pin-verify')" class="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer">
+                        Annulla
+                    </button>
+                    <button type="submit" class="px-5 py-2 text-xs font-bold bg-amber-500 hover:bg-amber-600 text-slate-950 rounded-xl shadow cursor-pointer">
+                        Sblocca
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- LOGICA APPLICATIVA & INTEGRAZIONE FIREBASE REALTIME                   -->
+    <!-- ===================================================================== -->
+    <script type="module">
+        import { initializeApp, getApps, deleteApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Variabili globali di stato
+        let firebaseApp = null;
+        let db = null;
+        let auth = null;
+        let currentUser = null;
+        let unsubscribeDevices = null;
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'candida-logistica-palmari';
+        const ACCOUNT_EMAIL = 'logistica@candida.it';
+        const SUPERADMIN_EMAIL = 'leandrofucci@candida.it';
+        const CUSTOM_FB_KEY = 'candida_custom_firebase_config';
+        const CLIENT_ID_KEY = 'candida_client_device_id';
+        const LOCAL_DEVICES_KEY = 'candida_palmari_offline_cache';
+        const ROLE_STORAGE_KEY = 'candida_active_role';
+        const ADMIN_PIN_KEY = 'candida_superadmin_pin';
+
+        // Stato locale sincronizzato con Firestore
+        let devicesList = [];
+        let selectedDeviceId = null;
+        let clientDeviceId = null;
+        let currentRole = 'logistics'; // 'superadmin' | 'logistics' | 'client'
+        let currentAppMode = 'admin'; // 'admin' (dashboard centrale) | 'client' (terminale palmare)
+        let currentMapType = 'warehouse'; // 'warehouse' | 'gps'
+        let leafletMap = null;
+        let leafletMarkers = {};
+
+        // Web Audio API per sirena di ricerca dispositivo
+        let audioCtx = null;
+        let alarmInterval = null;
+        let isSirenPlaying = false;
+        let gpsWatchId = null;
+        let batteryMonitorInterval = null;
+
+        // Coordinate base area logistica Candida (Nola / Marigliano / Napoli)
+        const BASE_LAT = 40.9248;
+        const BASE_LNG = 14.4552;
+
+        // Mappa zone interne magazzino -> coordinate percentuali (Pianta SVG) e offset GPS
+        const ZONE_COORDS = {
+            'Corsia A': { x: 15, y: 35, dLat: 0.0004, dLng: -0.0005 },
+            'Corsia B': { x: 38, y: 42, dLat: 0.0005, dLng: -0.0001 },
+            'Corsia C': { x: 61, y: 36, dLat: 0.0003, dLng: 0.0004 },
+            'Baia di Carico': { x: 42, y: 76, dLat: -0.0003, dLng: 0.0002 },
+            'Ricevimento Merci': { x: 84, y: 52, dLat: 0.0001, dLng: 0.0008 },
+            'Ufficio Spedizioni': { x: 84, y: 23, dLat: 0.0006, dLng: 0.0007 }
+        };
+
+        // =========================================================================
+        // PRECARICAMENTO ESATTO DEGLI 11 PALMARI REALI COLLEGATI A logistica@candida.it
+        // =========================================================================
+        function buildOfficialDevices() {
+            const now = Date.now();
+            const min = 60 * 1000;
+            const hr = 60 * min;
+
+            return [
+                {
+                    id: 'palmare-03',
+                    code: 'Palmare 03',
+                    shortCode: '03',
+                    model: 'Android Device',
+                    serial: 'AND-CND-03',
+                    operator: '',
+                    department: 'Picking',
+                    shift: 'Mattina',
+                    notes: 'Sessione Android #03 collegata a logistica@candida.it',
+                    status: 'online',
+                    battery: 89,
+                    ringing: false,
+                    zone: 'Corsia A',
+                    mapX: 15,
+                    mapY: 32,
+                    lat: BASE_LAT + 0.0004,
+                    lng: BASE_LNG - 0.0005,
+                    accuracy: '3m (Wi-Fi AP-01)',
+                    lastSeen: now - 20 * min,
+                    account: ACCOUNT_EMAIL
+                },
+                {
+                    id: 'palmare-05',
+                    code: 'Palmare 05',
+                    shortCode: '05',
+                    model: 'Android Device',
+                    serial: 'AND-CND-05',
+                    operator: '',
+                    department: 'Spedizioni',
+                    shift: 'Mattina',
+                    notes: 'Sessione Android #05 collegata a logistica@candida.it',
+                    status: 'online',
+                    battery: 94,
+                    ringing: false,
+                    zone: 'Ufficio Spedizioni',
+                    mapX: 82,
+                    mapY: 22,
+                    lat: BASE_LAT + 0.0006,
+                    lng: BASE_LNG + 0.0007,
+                    accuracy: '2m (Wi-Fi Ufficio)',
+                    lastSeen: now - 9 * min,
+                    account: ACCOUNT_EMAIL
+                },
+                {
+                    id: 'palmare-06',
+                    code: 'Palmare 06',
+                    shortCode: '06',
+                    model: 'Android Device',
+                    serial: 'AND-CND-06',
+                    operator: '',
+                    department: 'Ricevimento',
+                    shift: 'Mattina',
+                    notes: 'Sessione Android #06 collegata a logistica@candida.it',
+                    status: 'online',
+                    battery: 72,
+                    ringing: false,
+                    zone: 'Ricevimento Merci',
+                    mapX: 84,
+                    mapY: 50,
+                    lat: BASE_LAT + 0.0001,
+                    lng: BASE_LNG + 0.0006,
+                    accuracy: '4m (Wi-Fi AP-04)',
+                    lastSeen: now - 1 * hr,
+                    account: ACCOUNT_EMAIL
+                },
+                {
+                    id: 'palmare-07',
+                    code: 'Palmare 07',
+                    shortCode: '07',
+                    model: 'Android Device',
+                    serial: 'AND-CND-07',
+                    operator: '',
+                    department: 'Carico/Scarico',
+                    shift: 'Mattina',
+                    notes: 'Sessione Android #07 collegata a logistica@candida.it',
+                    status: 'online',
+                    battery: 91,
+                    ringing: false,
+                    zone: 'Baia di Carico',
+                    mapX: 32,
+                    mapY: 75,
+                    lat: BASE_LAT - 0.0003,
+                    lng: BASE_LNG + 0.0001,
+                    accuracy: '3m (Beacon Ribalta 2)',
+                    lastSeen: now - 10 * min,
+                    account: ACCOUNT_EMAIL
+                },
+                {
+                    id: 'palmare-08',
+                    code: 'Palmare 08',
+                    shortCode: '08',
+                    model: 'Android Device',
+                    serial: 'AND-CND-08',
+                    operator: '',
+                    department: 'Picking',
+                    shift: 'Mattina',
+                    notes: 'Sessione Android #08 collegata a logistica@candida.it',
+                    status: 'online',
+                    battery: 79,
+                    ringing: false,
+                    zone: 'Corsia B',
+                    mapX: 38,
+                    mapY: 42,
+                    lat: BASE_LAT + 0.0004,
+                    lng: BASE_LNG - 0.0001,
+                    accuracy: '3m (Wi-Fi AP-02)',
+                    lastSeen: now - 20 * min,
+                    account: ACCOUNT_EMAIL
+                },
+                {
+                    id: 'palmare-13',
+                    code: 'Palmare 13',
+                    shortCode: '13',
+                    model: 'Android Device',
+                    serial: 'AND-CND-13',
+                    operator: '',
+                    department: 'Controllo Qualità',
+                    shift: 'Pomeriggio',
+                    notes: 'Sessione Android #13 collegata a logistica@candida.it',
+                    status: 'online',
+                    battery: 65,
+                    ringing: false,
+                    zone: 'Corsia C',
+                    mapX: 61,
+                    mapY: 34,
+                    lat: BASE_LAT + 0.0002,
+                    lng: BASE_LNG + 0.0003,
+                    accuracy: '4m (Wi-Fi AP-03)',
+                    lastSeen: now - 55 * min,
+                    account: ACCOUNT_EMAIL
+                },
+                {
+                    id: 'palmare-14',
+                    code: 'Palmare 14',
+                    shortCode: '14',
+                    model: 'Android Device',
+                    serial: 'AND-CND-14',
+                    operator: '',
+                    department: 'Carico/Scarico',
+                    shift: 'Pomeriggio',
+                    notes: 'Sessione Android #14 collegata a logistica@candida.it',
+                    status: 'offline',
+                    battery: 48,
+                    ringing: false,
+                    zone: 'Baia di Carico',
+                    mapX: 55,
+                    mapY: 77,
+                    lat: BASE_LAT - 0.0004,
+                    lng: BASE_LNG + 0.0003,
+                    accuracy: '5m (Ultimo Wi-Fi)',
+                    lastSeen: now - 2 * hr,
+                    account: ACCOUNT_EMAIL
+                },
+                {
+                    id: 'zebra-tc21-1',
+                    code: 'Zebra TC21 #1',
+                    shortCode: 'TC21-1',
+                    model: 'Zebra TC21',
+                    serial: 'ZB-TC21-001',
+                    operator: '',
+                    department: 'Picking',
+                    shift: 'Mattina',
+                    notes: 'Terminale rugged Zebra TC21 (Unità 1)',
+                    status: 'online',
+                    battery: 96,
+                    ringing: false,
+                    zone: 'Corsia A',
+                    mapX: 18,
+                    mapY: 52,
+                    lat: BASE_LAT + 0.0002,
+                    lng: BASE_LNG - 0.0003,
+                    accuracy: '2m (Wi-Fi AP-01)',
+                    lastSeen: now - 11 * min,
+                    account: ACCOUNT_EMAIL
+                },
+                {
+                    id: 'zebra-tc21-2',
+                    code: 'Zebra TC21 #2',
+                    shortCode: 'TC21-2',
+                    model: 'Zebra TC21',
+                    serial: 'ZB-TC21-002',
+                    operator: '',
+                    department: 'Spedizioni',
+                    shift: 'Mattina',
+                    notes: 'Terminale rugged Zebra TC21 (Unità 2)',
+                    status: 'online',
+                    battery: 88,
+                    ringing: false,
+                    zone: 'Ufficio Spedizioni',
+                    mapX: 88,
+                    mapY: 28,
+                    lat: BASE_LAT + 0.0006,
+                    lng: BASE_LNG + 0.0004,
+                    accuracy: '2m (Wi-Fi Ufficio)',
+                    lastSeen: now - 13 * min,
+                    account: ACCOUNT_EMAIL
+                },
+                {
+                    id: 'zebra-tc22-1',
+                    code: 'Zebra TC22 #1',
+                    shortCode: 'TC22-1',
+                    model: 'Zebra TC22',
+                    serial: 'ZB-TC22-001',
+                    operator: '',
+                    department: 'Ricevimento',
+                    shift: 'Mattina',
+                    notes: 'Terminale rugged Zebra TC22 (Unità 1)',
+                    status: 'online',
+                    battery: 92,
+                    ringing: false,
+                    zone: 'Ricevimento Merci',
+                    mapX: 87,
+                    mapY: 56,
+                    lat: BASE_LAT + 0.0001,
+                    lng: BASE_LNG + 0.0007,
+                    accuracy: '2m (Wi-Fi AP-04)',
+                    lastSeen: now - 17 * min,
+                    account: ACCOUNT_EMAIL
+                },
+                {
+                    id: 'zebra-tc22-2',
+                    code: 'Zebra TC22 #2',
+                    shortCode: 'TC22-2',
+                    model: 'Zebra TC22',
+                    serial: 'ZB-TC22-002',
+                    operator: '',
+                    department: 'Controllo Qualità',
+                    shift: 'Notte',
+                    notes: 'Terminale rugged Zebra TC22 (Unità 2)',
+                    status: 'offline',
+                    battery: 54,
+                    ringing: false,
+                    zone: 'Corsia C',
+                    mapX: 63,
+                    mapY: 50,
+                    lat: BASE_LAT + 0.0003,
+                    lng: BASE_LNG + 0.0002,
+                    accuracy: '5m (Ultimo Wi-Fi)',
+                    lastSeen: now - 2 * hr,
+                    account: ACCOUNT_EMAIL
+                }
+            ];
+        }
+
+        // =========================================================================
+        // 1. INIZIALIZZAZIONE FIREBASE & AUTENTICAZIONE (REGOLA 1, 2, 3)
+        // =========================================================================
+        function updateCloudStatusUI(mode, detailText = '') {
+            const badge = document.getElementById('db-status-badge');
+            const modalStatus = document.getElementById('modal-cloud-status');
+            if (!badge) return;
+
+            if (mode === 'cloud') {
+                badge.className = "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/30 transition cursor-pointer";
+                badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Cloud Live Sincronizzato`;
+                if (modalStatus) {
+                    modalStatus.className = "text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700";
+                    modalStatus.textContent = detailText || "Connesso a Firestore Real-Time";
+                }
+            } else {
+                badge.className = "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-500/20 text-amber-300 border border-amber-500/30 hover:bg-amber-500/30 transition cursor-pointer";
+                badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-400"></span> Locale / Offline (Configura Cloud)`;
+                if (modalStatus) {
+                    modalStatus.className = "text-xs font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800";
+                    modalStatus.textContent = detailText || "Modalità Locale (incolla firebaseConfig per sync multi-dispositivo)";
+                }
+            }
+        }
+
+        function getActiveFirebaseConfig() {
+            // 1. Controlla parametro URL ?cfg=... per auto-configurazione immediata su tutti gli 11 palmari
+            try {
+                const urlParams = new URLSearchParams(window.location.search);
+                const cfgParam = urlParams.get('cfg');
+                if (cfgParam) {
+                    const decoded = JSON.parse(decodeURIComponent(atob(cfgParam)));
+                    if (decoded && decoded.apiKey && decoded.projectId) {
+                        localStorage.setItem(CUSTOM_FB_KEY, JSON.stringify(decoded));
+                        // Pulisce l'URL lasciandolo pulito
+                        window.history.replaceState({}, document.title, window.location.pathname);
+                        return decoded;
+                    }
+                }
+            } catch (e) {
+                console.warn("Parametro URL cfg non valido:", e);
+            }
+
+            // 2. Controlla localStorage
+            try {
+                const savedCustom = localStorage.getItem(CUSTOM_FB_KEY);
+                if (savedCustom) {
+                    const parsed = JSON.parse(savedCustom);
+                    if (parsed && parsed.apiKey && parsed.projectId) return parsed;
+                }
+            } catch (e) {}
+
+            // 3. Controlla variabile ambiente
+            if (typeof __firebase_config !== 'undefined' && __firebase_config) {
+                try {
+                    return JSON.parse(__firebase_config);
+                } catch (e) {}
+            }
+            return null;
+        }
+
+        async function initFirebase() {
+            // Recupera ruolo e identità palmare salvati
+            try {
+                const savedRole = localStorage.getItem(ROLE_STORAGE_KEY);
+                if (savedRole && ['superadmin', 'logistics', 'client'].includes(savedRole)) {
+                    currentRole = savedRole;
+                }
+                const savedClient = localStorage.getItem(CLIENT_ID_KEY) ||
+                    (window.name && window.name.startsWith('candida_client:') ? window.name.replace('candida_client:', '') : null);
+                if (savedClient) clientDeviceId = savedClient;
+            } catch (e) {}
+
+            applyRolePermissionsUI();
+
+            const firebaseConfig = getActiveFirebaseConfig();
+
+            try {
+                if (!firebaseConfig) {
+                    throw new Error("Configurazione Firebase non presente.");
+                }
+
+                if (unsubscribeDevices) {
+                    unsubscribeDevices();
+                    unsubscribeDevices = null;
+                }
+
+                if (getApps().length > 0) {
+                    for (const existingApp of getApps()) {
+                        await deleteApp(existingApp);
+                    }
+                }
+
+                firebaseApp = initializeApp(firebaseConfig);
+                auth = getAuth(firebaseApp);
+                db = getFirestore(firebaseApp);
+
+                // REGOLA 3: Autenticazione PRIMA di qualsiasi operazione Firestore
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    const cred = await signInWithCustomToken(auth, __initial_auth_token);
+                    currentUser = cred.user;
+                } else if (!auth.currentUser) {
+                    const cred = await signInAnonymously(auth);
+                    currentUser = cred.user;
+                } else {
+                    currentUser = auth.currentUser;
+                }
+
+                onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        currentUser = user;
+                        updateAccountHeaderLabels();
+                    }
+                });
+
+                updateCloudStatusUI('cloud');
+
+                // Controllo se la collezione è vuota per precaricare i 11 palmari ufficiali
+                await seedInitialDataIfEmpty();
+
+                // Avvio listener in tempo reale
+                listenToDevices();
+            } catch (error) {
+                console.warn("Fallback locale attivo:", error);
+                db = null;
+                updateCloudStatusUI('local');
+                try {
+                    const cached = localStorage.getItem(LOCAL_DEVICES_KEY);
+                    devicesList = cached ? JSON.parse(cached) : buildOfficialDevices();
+                } catch (e) {
+                    devicesList = buildOfficialDevices();
+                }
+                if (!selectedDeviceId && devicesList.length > 0) selectedDeviceId = devicesList[0].id;
+                if (!clientDeviceId && devicesList.length > 0) clientDeviceId = devicesList[0].id;
+                renderAll();
+            }
+        }
+
+        window.openFirebaseConfigModal = function() {
+            if (currentRole !== 'superadmin') {
+                requestSuperAdminAccess('config');
+                return;
+            }
+            const rawCfg = localStorage.getItem(CUSTOM_FB_KEY) || '';
+            const input = document.getElementById('firebase-config-input');
+            if (input) input.value = rawCfg;
+
+            const pinInput = document.getElementById('admin-pin-input');
+            if (pinInput) pinInput.value = getAdminPin();
+
+            const shareInput = document.getElementById('shareable-setup-url');
+            if (shareInput) {
+                if (rawCfg) {
+                    const encoded = btoa(encodeURIComponent(rawCfg));
+                    const baseUrl = window.location.origin + window.location.pathname;
+                    shareInput.value = `${baseUrl}?cfg=${encoded}`;
+                } else {
+                    shareInput.value = "Salva prima il JSON firebaseConfig per generare il link rapido";
+                }
+            }
+
+            document.getElementById('modal-firebase-config').classList.remove('hidden');
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        };
+
+        window.copyShareableSetupUrl = function() {
+            const shareInput = document.getElementById('shareable-setup-url');
+            if (!shareInput || !shareInput.value.startsWith('http')) {
+                showToast("Salva prima la configurazione Firebase per generare il link.", "warning");
+                return;
+            }
+            shareInput.select();
+            shareInput.setSelectionRange(0, 99999);
+            try {
+                document.execCommand('copy');
+                showToast("Link pre-configurato copiato! Aprilo sui palmari e sul PC logistica.", "success");
+            } catch (e) {
+                showToast("Seleziona e copia manualmente il link dal riquadro.", "info");
+            }
+        };
+
+        function getAdminPin() {
+            return localStorage.getItem(ADMIN_PIN_KEY) || '1234';
+        }
+
+        window.updateAdminPin = function() {
+            const newPin = document.getElementById('admin-pin-input').value.trim();
+            if (!newPin || newPin.length < 4) {
+                showToast("Inserisci un PIN di almeno 4 cifre.", "warning");
+                return;
+            }
+            localStorage.setItem(ADMIN_PIN_KEY, newPin);
+            showToast("Nuovo PIN Amministratore Supremo salvato!", "success");
+        };
+
+        window.saveCustomFirebaseConfig = async function(e) {
+            e.preventDefault();
+            const raw = document.getElementById('firebase-config-input').value.trim();
+            if (!raw) {
+                showToast("Incolla un oggetto JSON firebaseConfig valido.", "warning");
+                return;
+            }
+            try {
+                // Supporta anche se l'utente incolla "const firebaseConfig = { ... };"
+                const cleaned = raw.replace(/^const\s+\w+\s*=\s*/, '').replace(/;$/, '');
+                const parsed = JSON.parse(cleaned);
+                if (!parsed.apiKey || !parsed.projectId) {
+                    throw new Error("Mancano apiKey o projectId");
+                }
+                localStorage.setItem(CUSTOM_FB_KEY, JSON.stringify(parsed));
+                closeModal('modal-firebase-config');
+                showToast("Connessione al progetto Firebase in corso...", "info");
+                await initFirebase();
+                showToast("Firebase Cloud connesso! Sincronizzazione attiva.", "success");
+            } catch (err) {
+                showToast("Formato JSON non valido. Assicurati di incollare le parentesi graffe {...} con virgolette doppie.", "error");
+            }
+        };
+
+        window.clearCustomFirebaseConfig = async function() {
+            localStorage.removeItem(CUSTOM_FB_KEY);
+            document.getElementById('firebase-config-input').value = '';
+            closeModal('modal-firebase-config');
+            await initFirebase();
+            showToast("Configurazione personalizzata rimossa.", "info");
+        };
+
+        window.signInWithGoogleAccount = async function() {
+            if (!auth) {
+                showToast("Configura prima il tuo progetto Firebase nel riquadro sottostante per abilitare il login Google.", "warning");
+                return;
+            }
+            try {
+                const provider = new GoogleAuthProvider();
+                provider.setCustomParameters({ login_hint: ACCOUNT_EMAIL });
+                const result = await signInWithPopup(auth, provider);
+                currentUser = result.user;
+                showToast(`Accesso effettuato come ${result.user.email || ACCOUNT_EMAIL}`, "success");
+                listenToDevices();
+            } catch (err) {
+                console.error("Errore Google Sign-In:", err);
+                showToast("Accesso Google non completato (verifica che Google Auth sia attivo nella console Firebase).", "error");
+            }
+        };
+
+        // REGOLA 1: Percorso rigoroso /artifacts/{appId}/public/data/candida_palmari
+        function getDevicesCollectionRef() {
+            return collection(db, 'artifacts', appId, 'public', 'data', 'candida_palmari');
+        }
+
+        function getDeviceDocRef(deviceId) {
+            return doc(db, 'artifacts', appId, 'public', 'data', 'candida_palmari', deviceId);
+        }
+
+        async function seedInitialDataIfEmpty() {
+            if (!currentUser || !db) return;
+            try {
+                const colRef = getDevicesCollectionRef();
+                const snapshot = await getDocs(colRef);
+                if (snapshot.empty) {
+                    const initialDevices = buildOfficialDevices();
+                    for (const dev of initialDevices) {
+                        await setDoc(getDeviceDocRef(dev.id), dev);
+                    }
+                }
+            } catch (err) {
+                console.error("Errore precaricamento dati:", err);
+            }
+        }
+
+        // Listener Real-Time Firestore (REGOLA 2: query semplice + sort in JS)
+        function listenToDevices() {
+            if (!currentUser || !db) return;
+            if (unsubscribeDevices) unsubscribeDevices();
+
+            const colRef = getDevicesCollectionRef();
+            unsubscribeDevices = onSnapshot(
+                colRef,
+                (snapshot) => {
+                    const items = [];
+                    snapshot.forEach((docSnap) => {
+                        items.push({ id: docSnap.id, ...docSnap.data() });
+                    });
+                    // Ordina alfabeticamente per codice palmare in memoria
+                    items.sort((a, b) => (a.code || '').localeCompare(b.code || '', 'it', { numeric: true }));
+                    devicesList = items;
+
+                    try {
+                        localStorage.setItem(LOCAL_DEVICES_KEY, JSON.stringify(devicesList));
+                    } catch (e) {}
+
+                    if (!selectedDeviceId && devicesList.length > 0) {
+                        selectedDeviceId = devicesList[0].id;
+                    }
+                    if (!clientDeviceId && devicesList.length > 0) {
+                        clientDeviceId = devicesList[0].id;
+                    }
+
+                    checkClientAlarmState();
+                    renderAll();
+                },
+                (error) => {
+                    console.error("Errore onSnapshot Firestore:", error);
+                    showToast("Errore sincronizzazione Firestore: controlla le regole di sicurezza o la connessione.", "error");
+                }
+            );
+        }
+
+        async function saveDeviceToDb(deviceId, updates) {
+            // Aggiorna sempre subito lo stato locale e la cache offline
+            const idx = devicesList.findIndex(d => d.id === deviceId);
+            if (idx !== -1) {
+                devicesList[idx] = { ...devicesList[idx], ...updates };
+                try {
+                    localStorage.setItem(LOCAL_DEVICES_KEY, JSON.stringify(devicesList));
+                } catch (e) {}
+                checkClientAlarmState();
+                renderAll();
+            }
+
+            if (db && currentUser) {
+                try {
+                    await updateDoc(getDeviceDocRef(deviceId), updates);
+                } catch (err) {
+                    console.error("Errore aggiornamento Firestore:", err);
+                }
+            }
+        }
+
+        async function createNewDeviceInDb(newDev) {
+            devicesList.push(newDev);
+            selectedDeviceId = newDev.id;
+            try {
+                localStorage.setItem(LOCAL_DEVICES_KEY, JSON.stringify(devicesList));
+            } catch (e) {}
+            renderAll();
+
+            if (db && currentUser) {
+                try {
+                    await setDoc(getDeviceDocRef(newDev.id), newDev);
+                } catch (err) {
+                    console.error("Errore creazione su Firestore:", err);
+                }
+            }
+        }
+
+        window.deleteDeviceFromDb = async function(deviceId, event) {
+            if (event) event.stopPropagation();
+            if (currentRole !== 'superadmin') {
+                showToast("Solo l'Amministratore Supremo può eliminare un dispositivo.", "error");
+                return;
+            }
+            const dev = devicesList.find(d => d.id === deviceId);
+            if (!dev) return;
+
+            devicesList = devicesList.filter(d => d.id !== deviceId);
+            if (selectedDeviceId === deviceId) {
+                selectedDeviceId = devicesList.length > 0 ? devicesList[0].id : null;
+            }
+            try {
+                localStorage.setItem(LOCAL_DEVICES_KEY, JSON.stringify(devicesList));
+            } catch (e) {}
+            renderAll();
+
+            if (db && currentUser) {
+                try {
+                    await deleteDoc(getDeviceDocRef(deviceId));
+                } catch (err) {
+                    console.error("Errore eliminazione su Firestore:", err);
+                }
+            }
+            showToast(`${dev.code} rimosso dal parco dispositivi.`, "info");
+        };
+
+        window.resetToOfficialEleven = async function() {
+            if (currentRole !== 'superadmin') {
+                showToast("Solo l'Amministratore Supremo può ripristinare la flotta.", "error");
+                return;
+            }
+            const official = buildOfficialDevices();
+            if (db && currentUser) {
+                try {
+                    const colRef = getDevicesCollectionRef();
+                    const snap = await getDocs(colRef);
+                    for (const d of snap.docs) {
+                        await deleteDoc(d.ref);
+                    }
+                    for (const dev of official) {
+                        await setDoc(getDeviceDocRef(dev.id), dev);
+                    }
+                } catch (err) {
+                    console.error("Errore reset Firestore:", err);
+                }
+            }
+            devicesList = official;
+            selectedDeviceId = devicesList[0].id;
+            try {
+                localStorage.setItem(LOCAL_DEVICES_KEY, JSON.stringify(devicesList));
+            } catch (e) {}
+            renderAll();
+            showToast("Ripristinati tutti gli 11 palmari aziendali ufficiali!", "success");
+        };
+
+        function playConfirmationPing() {
+            try {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                const ctx = new AudioContext();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(880, ctx.currentTime);
+                osc.frequency.setValueAtTime(1174, ctx.currentTime + 0.1);
+                gain.gain.setValueAtTime(0.1, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start();
+                osc.stop(ctx.currentTime + 0.26);
+            } catch (e) {}
+        }
+
+        // Controlla se il terminale in Modalità Palmare deve mostrare l'overlay rosso e suonare
+        function checkClientAlarmState() {
+            const overlay = document.getElementById('alarm-fullscreen-overlay');
+            const label = document.getElementById('alarm-device-label');
+
+            if (currentAppMode !== 'client') {
+                overlay.classList.add('hidden');
+                stopAlarmSound();
+                return;
+            }
+
+            const clientDev = devicesList.find(d => d.id === clientDeviceId);
+            if (clientDev && clientDev.ringing) {
+                label.textContent = `${clientDev.code} • ${clientDev.operator || 'Non assegnato'} (${clientDev.zone})`;
+                overlay.classList.remove('hidden');
+                startAlarmSound();
+            } else {
+                overlay.classList.add('hidden');
+                stopAlarmSound();
+            }
+        }
+
+        window.stopAlarmFromClient = async function() {
+            if (!clientDeviceId) return;
+            stopAlarmSound();
+            await saveDeviceToDb(clientDeviceId, {
+                ringing: false,
+                status: 'online',
+                lastSeen: Date.now()
+            });
+            showToast("Allarme spento! Centrale notificata del ritrovamento.", "success");
+        };
+
+        // =========================================================================
+        // 3. GESTIONE RUOLI (AMMINISTRATORE SUPREMO, LOGISTICA, TERMINALE PALMARE)
+        // =========================================================================
+        function updateAccountHeaderLabels() {
+            const label = document.getElementById('active-account-label');
+            const roleBadge = document.getElementById('role-badge');
+            if (!label || !roleBadge) return;
+
+            if (currentRole === 'superadmin') {
+                label.textContent = SUPERADMIN_EMAIL;
+                roleBadge.className = "inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40";
+                roleBadge.innerHTML = `<i data-lucide="shield" class="w-3 h-3"></i> Amministratore Supremo`;
+            } else if (currentRole === 'logistics') {
+                label.textContent = ACCOUNT_EMAIL;
+                roleBadge.className = "inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30";
+                roleBadge.innerHTML = `<i data-lucide="radio" class="w-3 h-3"></i> Operatore Centrale`;
+            } else {
+                label.textContent = ACCOUNT_EMAIL;
+                roleBadge.className = "inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30";
+                roleBadge.innerHTML = `<i data-lucide="smartphone" class="w-3 h-3"></i> Terminale Palmare`;
+            }
+        }
+
+        function applyRolePermissionsUI() {
+            const adminView = document.getElementById('admin-view');
+            const clientView = document.getElementById('client-view');
+            const btnLogistics = document.getElementById('mode-logistics-btn');
+            const btnSuperAdmin = document.getElementById('mode-superadmin-btn');
+            const btnClient = document.getElementById('mode-client-btn');
+            const adminOnlyActions = document.getElementById('admin-only-actions');
+            const headerCloudBtn = document.getElementById('header-cloud-btn');
+            const headerGearBtn = document.getElementById('header-gear-btn');
+
+            const isSuper = currentRole === 'superadmin';
+            const isClient = currentRole === 'client';
+
+            // Mostra/nasconde strumenti esclusivi Amministratore Supremo
+            if (adminOnlyActions) adminOnlyActions.classList.toggle('hidden', !isSuper);
+            if (headerCloudBtn) headerCloudBtn.classList.toggle('hidden', !isSuper);
+            if (headerGearBtn) headerGearBtn.classList.toggle('hidden', !isSuper);
+
+            // Aggiorna stile pulsanti barra superiore
+            const activeClass = "flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition bg-amber-500 text-slate-950 shadow cursor-pointer";
+            const inactiveClass = "flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition text-slate-300 hover:text-white cursor-pointer";
+
+            if (btnLogistics) btnLogistics.className = currentRole === 'logistics' ? activeClass : inactiveClass;
+            if (btnSuperAdmin) btnSuperAdmin.className = currentRole === 'superadmin' ? activeClass : inactiveClass;
+            if (btnClient) btnClient.className = currentRole === 'client' ? activeClass : inactiveClass;
+
+            // In modalità Terminale Palmare bloccato, nasconde i pulsanti di uscita diretta nell'header (serve PIN)
+            if (btnLogistics) btnLogistics.classList.toggle('hidden', isClient);
+            if (btnSuperAdmin) btnSuperAdmin.classList.toggle('hidden', isClient);
+
+            if (isClient) {
+                currentAppMode = 'client';
+                adminView.classList.add('hidden');
+                clientView.classList.remove('hidden');
+                startClientGpsWatcher();
+                startClientBatteryMonitor();
+                try {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    if (!audioCtx) audioCtx = new AudioContext();
+                    if (audioCtx.state === 'suspended') audioCtx.resume();
+                } catch (e) {}
+            } else {
+                currentAppMode = 'admin';
+                adminView.classList.remove('hidden');
+                clientView.classList.add('hidden');
+                stopClientGpsWatcher();
+                stopClientBatteryMonitor();
+                if (currentMapType === 'gps' && leafletMap) {
+                    setTimeout(() => leafletMap.invalidateSize(), 150);
+                }
+            }
+
+            updateAccountHeaderLabels();
+            checkClientAlarmState();
+            renderAll();
+        }
+
+        window.switchRole = function(role) {
+            // Se si è bloccati in modalità palmare, non si può passare a Logistica/Admin senza PIN
+            if (currentRole === 'client' && role !== 'client') {
+                requestUnlockClientMode(role);
+                return;
+            }
+            if (role === 'superadmin') {
+                requestSuperAdminAccess('superadmin');
+                return;
+            }
+            currentRole = role;
+            try { localStorage.setItem(ROLE_STORAGE_KEY, role); } catch (e) {}
+            applyRolePermissionsUI();
+            if (role === 'client') {
+                showToast("Modalità Terminale Palmare attivata e protetta da PIN.", "info");
+            } else {
+                showToast("Profilo Operatore Logistica (logistica@candida.it) attivo.", "info");
+            }
+        };
+
+        window.openRoleModal = function() {
+            if (currentRole === 'client') {
+                requestUnlockClientMode('logistics');
+            } else if (currentRole === 'logistics') {
+                requestSuperAdminAccess('superadmin');
+            } else {
+                switchRole('logistics');
+            }
+        };
+
+        window.requestSuperAdminAccess = function(target = 'superadmin') {
+            if (currentRole === 'superadmin') {
+                if (target === 'config') openFirebaseConfigModal();
+                return;
+            }
+            document.getElementById('pin-action-target').value = target;
+            document.getElementById('pin-modal-desc').innerHTML = `Inserisci il PIN dell'<strong>Amministratore Supremo</strong> (<code>${SUPERADMIN_EMAIL}</code>) per sbloccare tutte le funzioni di sistema.`;
+            document.getElementById('pin-verify-input').value = '';
+            document.getElementById('modal-pin-verify').classList.remove('hidden');
+            setTimeout(() => document.getElementById('pin-verify-input').focus(), 100);
+        };
+
+        window.requestUnlockClientMode = function(nextRole = 'logistics') {
+            document.getElementById('pin-action-target').value = 'unlock_to_' + nextRole;
+            document.getElementById('pin-modal-desc').innerHTML = `Terminale protetto: inserisci il <strong>PIN Amministratore</strong> per uscire dalla modalità palmare.`;
+            document.getElementById('pin-verify-input').value = '';
+            document.getElementById('modal-pin-verify').classList.remove('hidden');
+            setTimeout(() => document.getElementById('pin-verify-input').focus(), 100);
+        };
+
+        window.submitPinVerification = function(e) {
+            e.preventDefault();
+            const entered = document.getElementById('pin-verify-input').value.trim();
+            const target = document.getElementById('pin-action-target').value;
+
+            if (entered !== getAdminPin()) {
+                showToast("PIN Amministratore errato!", "error");
+                document.getElementById('pin-verify-input').value = '';
+                return;
+            }
+
+            closeModal('modal-pin-verify');
+
+            if (target.startsWith('unlock_to_')) {
+                const desiredRole = target.replace('unlock_to_', '');
+                currentRole = desiredRole === 'superadmin' ? 'superadmin' : 'logistics';
+                try { localStorage.setItem(ROLE_STORAGE_KEY, currentRole); } catch (err) {}
+                applyRolePermissionsUI();
+                showToast("Modalità Terminale sbloccata con successo.", "success");
+            } else {
+                currentRole = 'superadmin';
+                try { localStorage.setItem(ROLE_STORAGE_KEY, 'superadmin'); } catch (err) {}
+                applyRolePermissionsUI();
+                showToast(`Accesso Amministratore Supremo (${SUPERADMIN_EMAIL}) effettuato!`, "success");
+                if (target === 'config') {
+                    openFirebaseConfigModal();
+                }
+            }
+        };
+
+        window.switchAppMode = function(mode) {
+            if (mode === 'client') switchRole('client');
+            else switchRole('logistics');
+        };
+
+                playBeep();
+                alarmInterval = setInterval(playBeep, 420);
+            } catch (e) {
+                console.warn("Web Audio bloccato fino all'interazione utente:", e);
+            }
+        }
+
+        function stopAlarmSound() {
+            isSirenPlaying = false;
+            if (alarmInterval) {
+                clearInterval(alarmInterval);
+                alarmInterval = null;
+            }
+        }
+
+        window.testClientAudio = function() {
+            try {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                if (!audioCtx) audioCtx = new AudioContext();
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+                playConfirmationPing();
+                showToast("Audio palmare sbloccato e funzionante!", "success");
+            } catch (e) {
+                showToast("Tocca lo schermo per abilitare l'audio del browser.", "warning");
+            }
+        };
+
+        function playConfirmationPing() {
+            try {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                const ctx = audioCtx || new AudioContext();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(880, ctx.currentTime);
+                osc.frequency.setValueAtTime(1174, ctx.currentTime + 0.1);
+                gain.gain.setValueAtTime(0.15, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start();
+                osc.stop(ctx.currentTime + 0.26);
+            } catch (e) {}
+        }
+
+        // Controlla se il terminale in Modalità Palmare deve mostrare l'overlay rosso e suonare
+        function checkClientAlarmState() {
+            const overlay = document.getElementById('alarm-fullscreen-overlay');
+            const label = document.getElementById('alarm-device-label');
+
+            if (currentAppMode !== 'client') {
+                overlay.classList.add('hidden');
+                stopAlarmSound();
+                return;
+            }
+
+            const clientDev = devicesList.find(d => d.id === clientDeviceId);
+            if (clientDev && (clientDev.ringing || clientDev.alarmActive)) {
+                label.textContent = `${clientDev.code} • ${clientDev.operator || 'Non assegnato'} (${clientDev.zone})`;
+                overlay.classList.remove('hidden');
+                startAlarmSound();
+            } else {
+                overlay.classList.add('hidden');
+                stopAlarmSound();
+            }
+        }
+
+        window.stopAlarmFromClient = async function() {
+            if (!clientDeviceId) return;
+            stopAlarmSound();
+            await saveDeviceToDb(clientDeviceId, {
+                ringing: false,
+                alarmActive: false,
+                status: 'online',
+                lastSeen: Date.now()
+            });
+            showToast("Allarme spento! Centrale notificata del ritrovamento.", "success");
+        };
+
+        // =========================================================================
+        // 3. CAMBIO MODALITÀ (CENTRALE ADMIN VS MODALITÀ PALMARE)
+        // =========================================================================
+        window.switchAppMode = function(mode) {
+            currentAppMode = mode;
+            const adminView = document.getElementById('admin-view');
+            const clientView = document.getElementById('client-view');
+            const btnAdmin = document.getElementById('mode-admin-btn');
+            const btnClient = document.getElementById('mode-client-btn');
+
+            if (mode === 'admin') {
+                adminView.classList.remove('hidden');
+                clientView.classList.add('hidden');
+                btnAdmin.className = "flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition bg-amber-500 text-slate-950 shadow cursor-pointer";
+                btnClient.className = "flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition text-slate-300 hover:text-white cursor-pointer";
+                stopClientGpsWatcher();
+                stopClientBatteryMonitor();
+                if (currentMapType === 'gps' && leafletMap) {
+                    setTimeout(() => leafletMap.invalidateSize(), 150);
+                }
+            } else {
+                adminView.classList.add('hidden');
+                clientView.classList.remove('hidden');
+                btnClient.className = "flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition bg-amber-500 text-slate-950 shadow cursor-pointer";
+                btnAdmin.className = "flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition text-slate-300 hover:text-white cursor-pointer";
+                startClientGpsWatcher();
+                startClientBatteryMonitor();
+                // Sblocca contesto audio al click utente
+                try {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    if (!audioCtx) audioCtx = new AudioContext();
+                    if (audioCtx.state === 'suspended') audioCtx.resume();
+                } catch (e) {}
+            }
+
+            checkClientAlarmState();
+            renderAll();
+        };
+
+        window.selectClientDevice = function(devId) {
+            clientDeviceId = devId;
+            try {
+                localStorage.setItem(CLIENT_ID_KEY, devId);
+                window.name = 'candida_client:' + devId;
+            } catch (e) {}
+            checkClientAlarmState();
+            renderClientView();
+            // Segnala subito online il terminale selezionato
+            saveDeviceToDb(devId, { status: 'online', lastSeen: Date.now() });
+        };
+
+        window.updateClientZone = async function(zoneName) {
+            if (!clientDeviceId) return;
+            const z = ZONE_COORDS[zoneName] || { x: 50, y: 50, dLat: 0, dLng: 0 };
+            await saveDeviceToDb(clientDeviceId, {
+                zone: zoneName,
+                mapX: z.x,
+                mapY: z.y,
+                status: 'online',
+                lastSeen: Date.now()
+            });
+            showToast(`Posizione aggiornata: ${zoneName}`, "success");
+        };
+
+        function startClientGpsWatcher() {
+            if (!("geolocation" in navigator)) return;
+            stopClientGpsWatcher();
+            gpsWatchId = navigator.geolocation.watchPosition(
+                async (pos) => {
+                    if (!clientDeviceId || currentAppMode !== 'client') return;
+                    const { latitude, longitude, accuracy } = pos.coords;
+                    await saveDeviceToDb(clientDeviceId, {
+                        lat: latitude,
+                        lng: longitude,
+                        accuracy: `${Math.round(accuracy)}m (GPS Live)`,
+                        status: 'online',
+                        lastSeen: Date.now()
+                    });
+                },
+                (err) => {
+                    console.warn("Geolocation watchPosition non disponibile:", err.message);
+                },
+                { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 }
+            );
+        }
+
+        function stopClientGpsWatcher() {
+            if (gpsWatchId !== null && "geolocation" in navigator) {
+                navigator.geolocation.clearWatch(gpsWatchId);
+                gpsWatchId = null;
+            }
+        }
+
+        async function syncRealBatteryLevel() {
+            if (!clientDeviceId || currentAppMode !== 'client') return;
+            if ('getBattery' in navigator) {
+                try {
+                    const battery = await navigator.getBattery();
+                    const levelPct = Math.round(battery.level * 100);
+                    await saveDeviceToDb(clientDeviceId, {
+                        battery: levelPct,
+                        status: 'online',
+                        lastSeen: Date.now()
+                    });
+                } catch (e) {}
+            }
+        }
+
+        function startClientBatteryMonitor() {
+            stopClientBatteryMonitor();
+            syncRealBatteryLevel();
+            batteryMonitorInterval = setInterval(syncRealBatteryLevel, 60000);
+        }
+
+        function stopClientBatteryMonitor() {
+            if (batteryMonitorInterval) {
+                clearInterval(batteryMonitorInterval);
+                batteryMonitorInterval = null;
+            }
+        }
+
+        window.sendRealGpsFromClient = function() {
+            if (!clientDeviceId) return;
+            if ("geolocation" in navigator) {
+                showToast("Acquisizione satelliti GPS in corso...", "info");
+                navigator.geolocation.getCurrentPosition(
+                    async (pos) => {
+                        const { latitude, longitude, accuracy } = pos.coords;
+                        await saveDeviceToDb(clientDeviceId, {
+                            lat: latitude,
+                            lng: longitude,
+                            accuracy: `${Math.round(accuracy)}m (GPS Reale)`,
+                            status: 'online',
+                            lastSeen: Date.now()
+                        });
+                        showToast("Coordinate GPS reali inviate alla centrale!", "success");
+                    },
+                    async () => {
+                        const jitterLat = BASE_LAT + (Math.random() - 0.5) * 0.0012;
+                        const jitterLng = BASE_LNG + (Math.random() - 0.5) * 0.0012;
+                        await saveDeviceToDb(clientDeviceId, {
+                            lat: jitterLat,
+                            lng: jitterLng,
+                            accuracy: "4m (GPS Assistito / Wi-Fi)",
+                            status: 'online',
+                            lastSeen: Date.now()
+                        });
+                        showToast("Posizione aggiornata e inviata alla centrale!", "success");
+                    },
+                    { timeout: 5000 }
+                );
+            }
+        };
+
+        // =========================================================================
+        // 4. MAPPA MAGAZZINO & MAPPA GPS (LEAFLET)
+        // =========================================================================
+        window.switchMapType = function(type) {
+            currentMapType = type;
+            const warehouseCont = document.getElementById('warehouse-map-container');
+            const gpsCont = document.getElementById('gps-map-container');
+            const btnWarehouse = document.getElementById('view-warehouse-btn');
+            const btnGps = document.getElementById('view-gps-btn');
+
+            if (type === 'warehouse') {
+                warehouseCont.classList.remove('hidden');
+                gpsCont.classList.add('hidden');
+                btnWarehouse.className = "px-3 py-1.5 rounded-lg text-xs font-bold transition bg-white text-slate-900 shadow-sm flex items-center gap-1.5 cursor-pointer";
+                btnGps.className = "px-3 py-1.5 rounded-lg text-xs font-bold transition text-slate-600 hover:text-slate-900 flex items-center gap-1.5 cursor-pointer";
+            } else {
+                warehouseCont.classList.add('hidden');
+                gpsCont.classList.remove('hidden');
+                btnGps.className = "px-3 py-1.5 rounded-lg text-xs font-bold transition bg-white text-slate-900 shadow-sm flex items-center gap-1.5 cursor-pointer";
+                btnWarehouse.className = "px-3 py-1.5 rounded-lg text-xs font-bold transition text-slate-600 hover:text-slate-900 flex items-center gap-1.5 cursor-pointer";
+                initOrUpdateLeafletMap();
+            }
+        };
+
+        function initOrUpdateLeafletMap() {
+            if (!leafletMap) {
+                leafletMap = L.map('leaflet-map').setView([BASE_LAT, BASE_LNG], 17);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    maxZoom: 20,
+                    attribution: '&copy; OpenStreetMap • Candida Logistica (Napoli/Nola/Marigliano)'
+                }).addTo(leafletMap);
+            }
+            setTimeout(() => {
+                leafletMap.invalidateSize();
+                updateLeafletMarkers();
+            }, 100);
+        }
+
+        function updateLeafletMarkers() {
+            if (!leafletMap) return;
+
+            // Rimuovi vecchi marker
+            Object.values(leafletMarkers).forEach(m => leafletMap.removeLayer(m));
+            leafletMarkers = {};
+
+            devicesList.forEach(dev => {
+                const isSelected = dev.id === selectedDeviceId;
+                const color = dev.ringing ? '#ef4444' : (dev.status === 'online' ? '#10b981' : '#64748b');
+                const badgeText = dev.shortCode || dev.code.replace('Palmare ', '').replace('Zebra ', '');
+
+                const customIcon = L.divIcon({
+                    className: 'custom-div-icon',
+                    html: `
+                        <div style="background:${color}; border:3px solid ${isSelected ? '#f59e0b' : '#ffffff'}; min-width:34px; height:34px; padding:0 6px; border-radius:9999px; display:flex; align-items:center; justify-content:center; color:white; font-weight:800; font-size:10px; box-shadow:0 4px 10px rgba(0,0,0,0.4); white-space:nowrap;">
+                            ${badgeText}
+                        </div>
+                    `,
+                    iconSize: [38, 34],
+                    iconAnchor: [19, 17]
+                });
+
+                const marker = L.marker([dev.lat || BASE_LAT, dev.lng || BASE_LNG], { icon: customIcon }).addTo(leafletMap);
+                marker.bindPopup(`
+                    <div style="font-family:Inter,sans-serif; min-width:170px;">
+                        <strong style="font-size:13px;">${dev.code} (${dev.model})</strong><br/>
+                        <span style="color:#475569; font-size:12px;">Operatore: <b>${dev.operator || 'Disponibile'}</b></span><br/>
+                        <span style="color:#64748b; font-size:11px;">Batteria: ${dev.battery}% • ${dev.zone}</span>
+                    </div>
+                `);
+                marker.on('click', () => {
+                    selectDevice(dev.id);
+                });
+                leafletMarkers[dev.id] = marker;
+
+                if (isSelected) {
+                    leafletMap.setView([dev.lat || BASE_LAT, dev.lng || BASE_LNG], 17, { animate: true });
+                    marker.openPopup();
+                }
+            });
+        }
+
+        window.selectDevice = function(deviceId) {
+            selectedDeviceId = deviceId;
+            renderAll();
+            if (currentMapType === 'gps' && leafletMap) {
+                updateLeafletMarkers();
+            }
+        };
+
+        // Simula movimento operatori nel magazzino
+        window.simulateMovement = async function() {
+            const zonesCoords = [
+                { zone: 'Corsia A', x: 15, y: 35, dLat: 0.0004, dLng: -0.0005 },
+                { zone: 'Corsia B', x: 38, y: 42, dLat: 0.0005, dLng: -0.0001 },
+                { zone: 'Corsia C', x: 61, y: 36, dLat: 0.0003, dLng: 0.0004 },
+                { zone: 'Baia di Carico', x: 42, y: 76, dLat: -0.0003, dLng: 0.0002 },
+                { zone: 'Ricevimento Merci', x: 84, y: 52, dLat: 0.0001, dLng: 0.0008 },
+                { zone: 'Ufficio Spedizioni', x: 84, y: 23, dLat: 0.0006, dLng: 0.0007 }
+            ];
+
+            for (const dev of devicesList) {
+                if (dev.status === 'online' && dev.operator) {
+                    const pick = zonesCoords[Math.floor(Math.random() * zonesCoords.length)];
+                    const offsetX = (Math.random() - 0.5) * 6;
+                    const offsetY = (Math.random() - 0.5) * 8;
+                    await saveDeviceToDb(dev.id, {
+                        zone: pick.zone,
+                        mapX: Math.max(8, Math.min(92, Math.round(pick.x + offsetX))),
+                        mapY: Math.max(12, Math.min(88, Math.round(pick.y + offsetY))),
+                        lat: BASE_LAT + pick.dLat + (Math.random() - 0.5) * 0.00015,
+                        lng: BASE_LNG + pick.dLng + (Math.random() - 0.5) * 0.00015,
+                        lastSeen: Date.now()
+                    });
+                }
+            }
+            showToast("Posizioni indoor/GPS aggiornate per tutti i palmari attivi.", "success");
+        };
+
+        // =========================================================================
+        // 5. MODALI: NUOVO PALMARE & ASSEGNAZIONE OPERATORE
+        // =========================================================================
+        window.openNewDeviceModal = function() {
+            const nextNum = String(devicesList.length + 1).padStart(2, '0');
+            document.getElementById('new-code').value = `Palmare #${nextNum}`;
+            document.getElementById('new-serial').value = `ZB-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+            document.getElementById('new-operator').value = '';
+            document.getElementById('modal-new-device').classList.remove('hidden');
+        };
+
+        window.closeModal = function(modalId) {
+            document.getElementById(modalId).classList.add('hidden');
+        };
+
+        window.handleCreateDevice = async function(e) {
+            e.preventDefault();
+            const code = document.getElementById('new-code').value.trim();
+            const serial = document.getElementById('new-serial').value.trim();
+            const model = document.getElementById('new-model').value;
+            const battery = parseInt(document.getElementById('new-battery').value, 10) || 100;
+            const zone = document.getElementById('new-zone').value;
+            const operator = document.getElementById('new-operator').value.trim();
+            const department = document.getElementById('new-dept').value;
+            const shift = document.getElementById('new-shift').value;
+
+            const coords = ZONE_COORDS[zone] || { x: 50, y: 50, dLat: 0, dLng: 0 };
+            const shortCode = code.replace('Palmare ', '').replace('Zebra ', '').substring(0, 7);
+
+            const newDev = {
+                id: 'palmare-' + Date.now(),
+                code,
+                shortCode,
+                model,
+                serial,
+                operator,
+                department,
+                shift,
+                notes: operator ? 'Assegnato alla registrazione' : 'Disponibile in postazione',
+                status: 'online',
+                battery,
+                ringing: false,
+                zone,
+                mapX: coords.x,
+                mapY: coords.y,
+                lat: BASE_LAT + coords.dLat + (Math.random() - 0.5) * 0.0002,
+                lng: BASE_LNG + coords.dLng + (Math.random() - 0.5) * 0.0002,
+                accuracy: '2m (Wi-Fi Logistica)',
+                lastSeen: Date.now(),
+                account: ACCOUNT_EMAIL
+            };
+
+            await createNewDeviceInDb(newDev);
+            closeModal('modal-new-device');
+            showToast(`${code} registrato con successo su logistica@candida.it!`, "success");
+        };
+
+        window.openAssignModal = function(deviceId, event) {
+            if (event) event.stopPropagation();
+            const dev = devicesList.find(d => d.id === deviceId);
+            if (!dev) return;
+
+            document.getElementById('assign-device-id').value = dev.id;
+            document.getElementById('assign-device-title').textContent = dev.code;
+            document.getElementById('assign-device-subtitle').textContent = `${dev.model} • SN: ${dev.serial}`;
+            document.getElementById('assign-operator-name').value = dev.operator || '';
+            document.getElementById('assign-dept').value = dev.department || 'Picking';
+            document.getElementById('assign-shift').value = dev.shift || 'Mattina';
+            document.getElementById('assign-zone').value = dev.zone || 'Corsia A';
+            document.getElementById('assign-notes').value = dev.notes || '';
+
+            document.getElementById('modal-assign-operator').classList.remove('hidden');
+        };
+
+        window.quickReleaseDevice = async function(deviceId, event) {
+            if (event) event.stopPropagation();
+            const dev = devicesList.find(d => d.id === deviceId);
+            if (!dev) return;
+            await saveDeviceToDb(deviceId, {
+                operator: '',
+                notes: 'Riconsegnato a fine turno - Disponibile',
+                zone: 'Ufficio Spedizioni',
+                mapX: 84,
+                mapY: 23,
+                lastSeen: Date.now()
+            });
+            showToast(`${dev.code} liberato e impostato come Disponibile.`, "info");
+        };
+
+        window.setDeviceUnassigned = async function() {
+            const devId = document.getElementById('assign-device-id').value;
+            await saveDeviceToDb(devId, {
+                operator: '',
+                notes: 'Riconsegnato - Disponibile',
+                zone: 'Ufficio Spedizioni',
+                mapX: 84,
+                mapY: 23,
+                lastSeen: Date.now()
+            });
+            closeModal('modal-assign-operator');
+            showToast("Palmare impostato come Disponibile / Non assegnato.", "info");
+        };
+
+        window.handleSaveAssignment = async function(e) {
+            e.preventDefault();
+            const devId = document.getElementById('assign-device-id').value;
+            const operator = document.getElementById('assign-operator-name').value.trim();
+            const department = document.getElementById('assign-dept').value;
+            const shift = document.getElementById('assign-shift').value;
+            const zone = document.getElementById('assign-zone').value;
+            const notes = document.getElementById('assign-notes').value.trim();
+            const zCoords = ZONE_COORDS[zone] || { x: 50, y: 50 };
+
+            await saveDeviceToDb(devId, {
+                operator,
+                department,
+                shift,
+                zone,
+                mapX: zCoords.x,
+                mapY: zCoords.y,
+                notes,
+                status: 'online',
+                lastSeen: Date.now()
+            });
+
+            closeModal('modal-assign-operator');
+            showToast(
+                operator ? `Palmare assegnato a ${operator} (${department} • ${shift}).` : "Palmare aggiornato come Disponibile.",
+                "success"
+            );
+        };
+
+        // =========================================================================
+        // 6. RENDERING INTERFACCIA (KPI, LISTA, PIANTA, TELEMETRIA, CLIENT)
+        // =========================================================================
+        function formatTimeAgo(timestamp) {
+            if (!timestamp) return 'N/D';
+            const diffSec = Math.floor((Date.now() - timestamp) / 1000);
+            if (diffSec < 10) return 'Adesso';
+            if (diffSec < 60) return `${diffSec}s fa`;
+            const diffMin = Math.floor(diffSec / 60);
+            if (diffMin < 60) return `${diffMin} min fa`;
+            const diffHr = Math.floor(diffMin / 60);
+            return `${diffHr} ore fa`;
+        }
+
+        function getBatteryIconAndColor(level) {
+            if (level <= 20) return { color: 'text-red-600', bg: 'bg-red-100', icon: 'battery-low' };
+            if (level <= 50) return { color: 'text-amber-600', bg: 'bg-amber-100', icon: 'battery-medium' };
+            return { color: 'text-emerald-600', bg: 'bg-emerald-100', icon: 'battery-full' };
+        }
+
+        window.renderAll = function() {
+            renderKPIs();
+            renderDevicesList();
+            renderWarehouseMarkers();
+            renderTelemetryPanel();
+            renderClientView();
+            if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+            }
+        };
+
+        function renderKPIs() {
+            const total = devicesList.length;
+            const online = devicesList.filter(d => d.status === 'online').length;
+            const assigned = devicesList.filter(d => d.operator && d.operator.trim() !== '').length;
+            const available = total - assigned;
+            const ringing = devicesList.filter(d => d.ringing).length;
+
+            document.getElementById('stat-total').textContent = total;
+            document.getElementById('stat-online').textContent = online;
+            document.getElementById('stat-assigned').textContent = assigned;
+            document.getElementById('stat-available').textContent = `${available} disponibili`;
+            document.getElementById('stat-ringing').textContent = ringing;
+        }
+
+        function getFilteredDevices() {
+            const query = (document.getElementById('search-input')?.value || '').toLowerCase().trim();
+            const statusFilter = document.getElementById('filter-status')?.value || 'all';
+            const deptFilter = document.getElementById('filter-dept')?.value || 'all';
+
+            return devicesList.filter(dev => {
+                const matchesQuery = !query ||
+                    (dev.code || '').toLowerCase().includes(query) ||
+                    (dev.serial || '').toLowerCase().includes(query) ||
+                    (dev.model || '').toLowerCase().includes(query) ||
+                    (dev.operator || '').toLowerCase().includes(query) ||
+                    (dev.zone || '').toLowerCase().includes(query);
+
+                let matchesStatus = true;
+                if (statusFilter === 'online') matchesStatus = dev.status === 'online';
+                else if (statusFilter === 'offline') matchesStatus = dev.status !== 'online';
+                else if (statusFilter === 'ringing') matchesStatus = !!dev.ringing;
+                else if (statusFilter === 'assigned') matchesStatus = !!(dev.operator && dev.operator.trim());
+                else if (statusFilter === 'available') matchesStatus = !(dev.operator && dev.operator.trim());
+
+                const matchesDept = deptFilter === 'all' || dev.department === deptFilter;
+
+                return matchesQuery && matchesStatus && matchesDept;
+            });
+        }
+
+        function renderDevicesList() {
+            const container = document.getElementById('devices-list-container');
+            const filtered = getFilteredDevices();
+            document.getElementById('filtered-count').textContent = filtered.length;
+
+            if (filtered.length === 0) {
+                container.innerHTML = `
+                    <div class="bg-white rounded-2xl p-8 text-center border border-slate-200">
+                        <i data-lucide="search-x" class="w-10 h-10 text-slate-300 mx-auto mb-2"></i>
+                        <p class="font-bold text-slate-700">Nessun palmare trovato</p>
+                        <p class="text-xs text-slate-400 mt-1">Prova a modificare i filtri di ricerca.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = filtered.map(dev => {
+                const isSelected = dev.id === selectedDeviceId;
+                const isAssigned = dev.operator && dev.operator.trim() !== '';
+                const bat = getBatteryIconAndColor(dev.battery || 0);
+                const badgeLabel = dev.shortCode || dev.code.replace('Palmare ', '').replace('Zebra ', '');
+
+                return `
+                    <div onclick="selectDevice('${dev.id}')" class="bg-white rounded-2xl p-4 border-2 transition cursor-pointer shadow-sm hover:shadow-md ${dev.ringing ? 'border-red-500 bg-red-50/40' : (isSelected ? 'border-amber-500 ring-2 ring-amber-500/20' : 'border-slate-200 hover:border-slate-300')}">
+                        <div class="flex items-start justify-between gap-2">
+                            <div class="flex items-center gap-2.5">
+                                <div class="relative">
+                                    <div class="min-w-[44px] h-10 px-2 rounded-xl flex items-center justify-center font-extrabold text-xs ${dev.ringing ? 'bg-red-600 text-white animate-pulse' : (dev.status === 'online' ? 'bg-slate-900 text-amber-400' : 'bg-slate-200 text-slate-500')}">
+                                        ${badgeLabel}
+                                    </div>
+                                    <span class="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white ${dev.status === 'online' ? 'bg-emerald-500' : 'bg-slate-400'}"></span>
+                                </div>
+                                <div>
+                                    <div class="flex items-center gap-2 flex-wrap">
+                                        <h3 class="font-bold text-slate-900 text-sm">${dev.code}</h3>
+                                        <span class="text-[11px] font-mono-code px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded">${dev.model}</span>
+                                    </div>
+                                    <p class="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
+                                        <i data-lucide="map-pin" class="w-3 h-3 text-amber-500"></i>
+                                        <span class="font-semibold text-slate-700">${dev.zone}</span>
+                                        <span>•</span>
+                                        <span>${formatTimeAgo(dev.lastSeen)}</span>
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- Badge Batteria -->
+                            <div class="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold shrink-0 ${bat.bg} ${bat.color}">
+                                <i data-lucide="${bat.icon}" class="w-3.5 h-3.5"></i>
+                                <span>${dev.battery}%</span>
+                            </div>
+                        </div>
+
+                        <!-- Box Operatore Assegnato -->
+                        <div class="mt-3 p-2.5 rounded-xl flex items-center justify-between gap-2 ${isAssigned ? 'bg-blue-50/70 border border-blue-100' : 'bg-slate-100 border border-slate-200/70'}">
+                            <div class="flex items-center gap-2 min-w-0">
+                                <i data-lucide="${isAssigned ? 'user' : 'user-plus'}" class="w-4 h-4 shrink-0 ${isAssigned ? 'text-blue-600' : 'text-slate-400'}"></i>
+                                <div class="truncate">
+                                    ${isAssigned ? `
+                                        <p class="text-xs font-bold text-slate-900 truncate">${dev.operator}</p>
+                                        <p class="text-[11px] text-slate-500 truncate">${dev.department} • Turno ${dev.shift}</p>
+                                    ` : `
+                                        <p class="text-xs font-semibold text-slate-500">Disponibile / Non assegnato</p>
+                                    `}
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-1.5 shrink-0">
+                                ${isAssigned ? `
+                                    <button onclick="quickReleaseDevice('${dev.id}', event)" title="Libera palmare a fine turno" class="px-2 py-1.5 bg-white hover:bg-red-50 text-red-600 border border-red-200 rounded-lg text-xs font-semibold transition cursor-pointer">
+                                        Libera
+                                    </button>
+                                ` : ''}
+                                <button onclick="openAssignModal('${dev.id}', event)" class="px-2.5 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-lg text-xs font-semibold transition cursor-pointer">
+                        <!-- Pulsanti Localizza + Fai Suonare (+ Elimina solo per SuperAdmin) -->
+                        <div class="mt-3 flex items-center gap-2">
+                            <button onclick="selectDevice('${dev.id}')" class="py-2 px-3 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 transition flex items-center justify-center gap-1.5 cursor-pointer">
+                                <i data-lucide="crosshair" class="w-3.5 h-3.5 text-amber-600"></i>
+                                <span>Localizza</span>
+                            </button>
+                            <button onclick="toggleDeviceRing('${dev.id}', event)" class="flex-1 py-2 px-3 rounded-xl text-xs font-extrabold uppercase tracking-wide transition flex items-center justify-center gap-2 cursor-pointer ${dev.ringing ? 'bg-red-600 hover:bg-red-700 text-white shadow-md animate-pulse' : 'bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-sm'}">
+                                <i data-lucide="${dev.ringing ? 'bell-off' : 'volume-2'}" class="w-4 h-4"></i>
+                                <span>${dev.ringing ? 'FERMA SUONO' : 'FAI SUONARE'}</span>
+                            </button>
+                            ${currentRole === 'superadmin' ? `
+                                <button onclick="deleteDeviceFromDb('${dev.id}', event)" title="Elimina palmare (Solo Admin)" class="p-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 transition cursor-pointer">
+                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                </button>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderWarehouseMarkers() {
+            const layer = document.getElementById('warehouse-markers-layer');
+            if (!layer) return;
+
+            layer.innerHTML = devicesList.map(dev => {
+                const isSelected = dev.id === selectedDeviceId;
+                const isRinging = dev.ringing;
+                const isOnline = dev.status === 'online';
+                const badgeLabel = dev.shortCode || dev.code.replace('Palmare ', '').replace('Zebra ', '');
+
+                const pinBg = isRinging ? 'bg-red-600 border-white text-white' : (isSelected ? 'bg-amber-500 border-white text-slate-950' : (isOnline ? 'bg-emerald-500 border-white text-white' : 'bg-slate-500 border-slate-300 text-white'));
+
+                return `
+                    <div onclick="selectDevice('${dev.id}')" style="left: ${dev.mapX || 50}%; top: ${dev.mapY || 50}%;" class="absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer group z-10">
+                        ${(isSelected || isRinging) ? `<span class="absolute inset-0 rounded-full animate-ping-slow ${isRinging ? 'bg-red-500' : 'bg-amber-400'}"></span>` : ''}
+                        <div class="relative flex flex-col items-center">
+                            <div class="px-2.5 py-1 rounded-full border-2 shadow-lg font-extrabold text-[11px] flex items-center gap-1 transition transform group-hover:scale-110 ${pinBg}">
+                                <i data-lucide="${isRinging ? 'volume-2' : 'smartphone'}" class="w-3 h-3"></i>
+                                <span>${badgeLabel}</span>
+                            </div>
+                            <div class="mt-1 px-2 py-0.5 rounded bg-slate-950/90 text-white text-[10px] font-semibold whitespace-nowrap border border-slate-700 shadow">
+                                ${dev.operator ? dev.operator.split(' ')[0] : 'Libero'} • ${dev.battery}%
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderTelemetryPanel() {
+            const panel = document.getElementById('selected-device-telemetry');
+            const dev = devicesList.find(d => d.id === selectedDeviceId);
+
+            if (!dev) {
+                panel.innerHTML = `<p class="text-xs text-slate-500">Seleziona un palmare per visualizzare i dettagli GPS e telemetria.</p>`;
+                return;
+            }
+
+            panel.innerHTML = `
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div class="space-y-1">
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <span class="font-extrabold text-slate-900 text-sm">${dev.code} (${dev.model})</span>
+                            <span class="text-xs font-mono-code px-2 py-0.5 bg-slate-200 text-slate-700 rounded">SN: ${dev.serial}</span>
+                            <span class="text-xs font-bold px-2 py-0.5 rounded ${dev.status === 'online' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}">
+                                ${dev.status === 'online' ? 'ONLINE' : 'OFFLINE'}
+                            </span>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600">
+                            <span><strong>Zona:</strong> ${dev.zone}</span>
+                            <span><strong>GPS:</strong> ${(dev.lat || BASE_LAT).toFixed(5)}, ${(dev.lng || BASE_LNG).toFixed(5)}</span>
+                            <span><strong>Precisione:</strong> ${dev.accuracy || '3m'}</span>
+                            <span><strong>Segnale:</strong> ${formatTimeAgo(dev.lastSeen)}</span>
+                        </div>
+                        ${dev.notes ? `<p class="text-xs text-slate-500 italic">Note: "${dev.notes}"</p>` : ''}
+                    </div>
+
+                    <div class="flex items-center gap-2 shrink-0">
+                        <button onclick="openAssignModal('${dev.id}', event)" class="px-3 py-2 bg-white hover:bg-slate-100 border border-slate-300 text-slate-800 rounded-xl text-xs font-bold transition cursor-pointer">
+                            Gestisci Operatore
+                        </button>
+                        <button onclick="toggleDeviceRing('${dev.id}', event)" class="px-3.5 py-2 rounded-xl text-xs font-extrabold transition flex items-center gap-1.5 cursor-pointer ${dev.ringing ? 'bg-red-600 text-white' : 'bg-slate-900 text-amber-400 hover:bg-slate-800'}">
+                            <i data-lucide="volume-2" class="w-4 h-4"></i>
+                            <span>${dev.ringing ? 'Stop Suono' : 'Fai Suonare'}</span>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderClientView() {
+            const selector = document.getElementById('client-device-selector');
+            const card = document.getElementById('client-device-card');
+            if (!selector || !card) return;
+
+            selector.innerHTML = devicesList.map(d => `
+                <option value="${d.id}" ${d.id === clientDeviceId ? 'selected' : ''}>
+                    ${d.code} — ${d.model} (${d.operator || 'Non assegnato'})
+                </option>
+            `).join('');
+
+            const dev = devicesList.find(d => d.id === clientDeviceId);
+            if (!dev) return;
+
+            card.innerHTML = `
+                <div class="flex items-center justify-between border-b border-slate-100 pb-4">
+                    <div>
+                        <span class="text-xs font-mono-code text-slate-400">SN: ${dev.serial}</span>
+                        <h3 class="text-2xl font-extrabold text-slate-900">${dev.code}</h3>
+                        <p class="text-sm text-slate-500">${dev.model}</p>
+                    </div>
+                    <div class="text-right">
+                        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700">
+                            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+                            In ascolto Centrale
+                        </span>
+                        <p class="text-sm font-bold text-slate-700 mt-2">Batteria: ${dev.battery}%</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3 text-sm">
+                    <div class="p-3 bg-slate-50 rounded-xl border border-slate-200/80">
+                        <p class="text-xs text-slate-400 uppercase font-bold">Operatore Loggato</p>
+                        <p class="font-bold text-slate-900 mt-0.5">${dev.operator || 'Nessuno (Disponibile)'}</p>
+                    </div>
+                    <div class="p-3 bg-slate-50 rounded-xl border border-slate-200/80">
+                        <p class="text-xs text-slate-400 uppercase font-bold">Reparto / Zona</p>
+                        <p class="font-bold text-slate-900 mt-0.5">${dev.zone}</p>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Sistema Toast Notifiche
+        window.showToast = function(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const colors = {
+                success: 'bg-emerald-900 text-white border-emerald-700',
+                warning: 'bg-amber-500 text-slate-950 border-amber-600 font-bold',
+                error: 'bg-red-600 text-white border-red-800',
+                info: 'bg-slate-900 text-white border-slate-700'
+            };
+
+            const toast = document.createElement('div');
+            toast.className = `pointer-events-auto px-4 py-3 rounded-xl shadow-xl border text-xs sm:text-sm flex items-center justify-between gap-3 transition-all transform translate-y-0 opacity-100 ${colors[type] || colors.info}`;
+            toast.innerHTML = `<span>${message}</span>`;
+
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateY(10px)';
+                setTimeout(() => toast.remove(), 300);
+            }, 3500);
+        };
+
+        // Avvio applicazione al caricamento finestra
+        window.addEventListener('DOMContentLoaded', () => {
+            initFirebase();
+        });
+    </script>
+</body>
+</html>
