@@ -3,714 +3,418 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Candida Logistica - Gestione Palmari</title>
+  <title>Candida Logistica - Palmari</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <style>
-    @keyframes pulseRed {
-      0%, 100% { background-color: #dc2626; }
-      50% { background-color: #7f1d1d; }
-    }
-    .alarm-flash {
-      animation: pulseRed 0.7s infinite;
-    }
+    @keyframes flashRed { 0%,100%{background:#dc2626} 50%{background:#7f1d1d} }
+    .alarm-flash { animation: flashRed 0.7s infinite; }
   </style>
 </head>
-<body class="bg-slate-100 text-slate-800 font-sans min-h-screen flex flex-col">
+<body class="bg-slate-100 text-slate-800 min-h-screen flex flex-col">
 
-  <!-- BARRA SUPERIORE -->
-  <header class="bg-slate-900 text-white shadow-md sticky top-0 z-40">
-    <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
-      <div class="flex items-center gap-3">
-        <div class="bg-blue-600 p-2 rounded-lg font-bold text-lg">📦</div>
-        <div>
-          <h1 class="font-bold text-base sm:text-lg leading-tight">Candida Logistica</h1>
-          <p class="text-xs text-slate-400">Gestione 11 Palmari • <span id="roleBadge" class="text-emerald-400 font-semibold">Operatore Centrale</span></p>
-        </div>
-      </div>
-
-      <div class="flex flex-wrap items-center gap-2">
-        <span id="cloudStatus" class="text-xs px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40">
-          ● Locale (Non connesso al Cloud)
-        </span>
-        <button id="btnModeLogistica" type="button" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 text-white shadow">
-          Centrale
-        </button>
-        <button id="btnModePalmare" type="button" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-700 hover:bg-slate-600 text-slate-200">
-          Modalità Palmare
-        </button>
-        <button id="btnModeAdmin" type="button" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-600 hover:bg-amber-500 text-white">
-          🔒 Admin
-        </button>
+<header class="bg-slate-900 text-white shadow sticky top-0 z-40">
+  <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-2">
+    <div class="flex items-center gap-2.5">
+      <span class="bg-blue-600 p-2 rounded-lg text-lg">📦</span>
+      <div>
+        <h1 class="font-bold text-base sm:text-lg leading-tight">Candida Logistica</h1>
+        <p class="text-xs text-slate-400">11 Palmari • <span id="roleBadge" class="text-emerald-400 font-semibold">Operatore Centrale</span></p>
       </div>
     </div>
-  </header>
+    <div class="flex flex-wrap items-center gap-2">
+      <span id="cloudStatus" class="text-xs px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40">● Locale</span>
+      <button id="btnCentrale" type="button" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-blue-600 text-white">Centrale</button>
+      <button id="btnPalmare" type="button" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-700 hover:bg-slate-600 text-white">Modalità Palmare</button>
+      <button id="btnAdmin" type="button" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-600 hover:bg-amber-500 text-white">🔒 Admin</button>
+    </div>
+  </div>
+</header>
 
-  <!-- CONTENUTO PRINCIPALE: CENTRALE / ADMIN -->
-  <main id="viewCentrale" class="max-w-7xl w-full mx-auto px-4 py-6 flex-1 space-y-6">
+<main id="viewCentrale" class="max-w-7xl w-full mx-auto px-4 py-5 flex-1 space-y-5">
+  <section id="adminBar" class="hidden bg-amber-50 border border-amber-300 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <p class="font-bold text-amber-900 text-sm">Pannello Amministratore (Leandro)</p>
+      <p class="text-xs text-amber-700">Configura cloud Firebase, aggiungi dispositivi o ripristina elenco.</p>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      <button id="btnOpenCloud" type="button" class="px-3 py-2 bg-indigo-600 text-white text-xs font-bold rounded-lg">☁️ Configura Cloud</button>
+      <button id="btnAddDev" type="button" class="px-3 py-2 bg-emerald-600 text-white text-xs font-bold rounded-lg">+ Palmare</button>
+      <button id="btnReset11" type="button" class="px-3 py-2 bg-rose-600 text-white text-xs font-bold rounded-lg">↺ Ripristina 11</button>
+      <button id="btnExitAdmin" type="button" class="px-3 py-2 bg-white border border-amber-400 text-amber-900 text-xs font-bold rounded-lg">Esci Admin</button>
+    </div>
+  </section>
 
-    <!-- BARRA STRUMENTI ADMIN (Nascosta a Logistica) -->
-    <section id="adminToolbar" class="hidden bg-amber-50 border border-amber-300 rounded-xl p-4 shadow-sm">
-      <div class="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 class="font-bold text-amber-900 text-sm">Pannello Amministratore Supremo (Leandro)</h2>
-          <p class="text-xs text-amber-700">Gestisci sincronizzazione cloud, dispositivi e PIN di sicurezza.</p>
-        </div>
-        <div class="flex flex-wrap gap-2">
-          <button id="btnOpenCloud" type="button" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg shadow">
-            ☁️ Configura Cloud & Link Palmari
-          </button>
-          <button id="btnAddDevice" type="button" class="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg shadow">
-            + Nuovo Palmare
-          </button>
-          <button id="btnChangePin" type="button" class="px-3 py-2 bg-slate-700 hover:bg-slate-800 text-white text-xs font-semibold rounded-lg">
-            🔑 Cambia PIN
-          </button>
-          <button id="btnReset11" type="button" class="px-3 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold rounded-lg">
-            ↺ Ripristina 11 Palmari
-          </button>
-          <button id="btnLogoutAdmin" type="button" class="px-3 py-2 bg-white border border-amber-400 text-amber-900 text-xs font-semibold rounded-lg">
-            Esci da Admin
-          </button>
-        </div>
-      </div>
-    </section>
+  <section class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+    <div class="bg-white p-4 rounded-xl shadow-sm border"><p class="text-xs text-slate-500">Totale Palmari</p><p id="kpiTot" class="text-2xl font-bold mt-1">11</p></div>
+    <div class="bg-white p-4 rounded-xl shadow-sm border"><p class="text-xs text-slate-500">Assegnati</p><p id="kpiAss" class="text-2xl font-bold text-blue-600 mt-1">0</p></div>
+    <div class="bg-white p-4 rounded-xl shadow-sm border"><p class="text-xs text-slate-500">Disponibili</p><p id="kpiFree" class="text-2xl font-bold text-emerald-600 mt-1">11</p></div>
+    <div class="bg-white p-4 rounded-xl shadow-sm border"><p class="text-xs text-slate-500">In Allarme</p><p id="kpiAlm" class="text-2xl font-bold text-rose-600 mt-1">0</p></div>
+  </section>
 
-    <!-- KPI RIEPILOGO -->
-    <section class="grid grid-cols-2 sm:grid-cols-4 gap-4">
-      <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-        <p class="text-xs text-slate-500 font-medium">Totale Palmari</p>
-        <p id="kpiTotal" class="text-2xl font-bold text-slate-800 mt-1">11</p>
-      </div>
-      <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-        <p class="text-xs text-slate-500 font-medium">Assegnati in Turno</p>
-        <p id="kpiAssigned" class="text-2xl font-bold text-blue-600 mt-1">0</p>
-      </div>
-      <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-        <p class="text-xs text-slate-500 font-medium">Disponibili</p>
-        <p id="kpiFree" class="text-2xl font-bold text-emerald-600 mt-1">11</p>
-      </div>
-      <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-        <p class="text-xs text-slate-500 font-medium">In Allarme Sonoro</p>
-        <p id="kpiAlarm" class="text-2xl font-bold text-rose-600 mt-1">0</p>
-      </div>
-    </section>
+  <section class="bg-white p-3.5 rounded-xl shadow-sm border flex flex-wrap items-center justify-between gap-2">
+    <div class="flex flex-wrap gap-2 flex-1">
+      <input id="searchBox" type="text" placeholder="Cerca palmare, operatore, zona..." class="px-3 py-2 text-sm border rounded-lg w-full sm:w-64" />
+      <select id="statusFilter" class="px-3 py-2 text-sm border rounded-lg bg-white">
+        <option value="all">Tutti gli stati</option>
+        <option value="assigned">Solo Assegnati</option>
+        <option value="free">Solo Disponibili</option>
+        <option value="alarm">In Allarme</option>
+      </select>
+    </div>
+    <div class="flex gap-2">
+      <button id="tabList" type="button" class="px-3 py-2 text-xs font-bold rounded-lg bg-slate-900 text-white">📋 Lista</button>
+      <button id="tabZone" type="button" class="px-3 py-2 text-xs font-bold rounded-lg bg-slate-200 text-slate-700">🏭 Pianta</button>
+      <button id="tabMap" type="button" class="px-3 py-2 text-xs font-bold rounded-lg bg-slate-200 text-slate-700">🗺️ Mappa GPS</button>
+    </div>
+  </section>
 
-    <!-- FILTRI E SWITCH VISTA -->
-    <section class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-wrap items-center justify-between gap-3">
-      <div class="flex flex-wrap items-center gap-2 flex-1 min-w-[240px]">
-        <input id="searchInput" type="text" placeholder="Cerca palmare, modello, operatore o reparto..." class="w-full sm:w-72 px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
-        <select id="filterStatus" class="px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white">
-          <option value="all">Tutti gli stati</option>
-          <option value="assigned">Solo Assegnati</option>
-          <option value="free">Solo Disponibili</option>
-          <option value="alarm">In Allarme</option>
-        </select>
-      </div>
+  <section id="panelList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></section>
+  <section id="panelZone" class="hidden grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"></section>
+  <section id="panelMap" class="hidden bg-white p-4 rounded-xl border"><div id="gpsMap" class="w-full h-96 rounded-lg"></div></section>
+</main>
+
+<main id="viewPalmare" class="hidden flex-1 flex items-center justify-center p-4">
+  <div id="termCard" class="w-full max-w-md bg-white rounded-2xl shadow-xl border p-6 space-y-4 text-center">
+    <div class="flex justify-between items-center border-b pb-3">
+      <span class="text-xs font-bold text-blue-600 uppercase">Terminale Palmare</span>
+      <button id="btnCloseTerm" type="button" class="text-xs px-2.5 py-1 rounded bg-slate-200 font-bold">🔒 Esci</button>
+    </div>
+    <select id="selTermDev" class="w-full p-2.5 font-bold border-2 border-blue-500 rounded-xl bg-blue-50"></select>
+    <div class="bg-slate-50 rounded-xl p-4 border text-left text-sm space-y-1.5 text-slate-800">
+      <p>Modello: <strong id="tModel">-</strong></p>
+      <p>Operatore: <strong id="tOp" class="text-blue-700">Libero</strong></p>
+      <p>Zona: <strong id="tZone">-</strong></p>
+      <p>GPS: <strong id="tGps">In attesa</strong></p>
+    </div>
+    <select id="tZoneChange" class="w-full p-2 text-sm border rounded-lg">
+      <option value="Spedizioni / Ribalte">Spedizioni / Ribalte</option>
+      <option value="Ricevimento Merci">Ricevimento Merci</option>
+      <option value="Corsie Picking A-B">Corsie Picking A-B</option>
+      <option value="Corsie Picking C-D">Corsie Picking C-D</option>
+      <option value="Controllo Qualità / Resi">Controllo Qualità / Resi</option>
+      <option value="Ufficio Logistica / Ricarica">Ufficio Logistica / Ricarica</option>
+    </select>
+    <button id="btnEnableSensors" type="button" class="w-full py-3 bg-emerald-600 text-white font-bold rounded-xl text-sm">🔊 Attiva Sirena & GPS</button>
+    <button id="btnStopAlarmTerm" type="button" class="hidden w-full py-4 bg-white text-red-700 font-black text-base rounded-xl border-4 border-red-700">🔕 SPEGNI ALLARME</button>
+  </div>
+</main>
+
+<!-- MODALE PIN INTERNA -->
+<div id="modalPin" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl max-w-xs w-full p-5 space-y-3 shadow-2xl">
+    <h3 class="font-bold text-base">Inserisci PIN Amministratore</h3>
+    <p class="text-xs text-slate-500">PIN predefinito: <strong>1234</strong></p>
+    <input id="pinInput" type="password" inputmode="numeric" placeholder="****" class="w-full px-3 py-2 border rounded-lg text-center text-lg tracking-widest font-bold" />
+    <p id="pinErr" class="hidden text-xs text-red-600 font-semibold">PIN non corretto.</p>
+    <div class="flex justify-end gap-2">
+      <button id="btnCancelPin" type="button" class="px-3 py-1.5 text-xs font-bold text-slate-600">Annulla</button>
+      <button id="btnConfirmPin" type="button" class="px-4 py-1.5 text-xs font-bold bg-amber-600 text-white rounded-lg">Conferma</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODALE ASSEGNA -->
+<div id="modalAssign" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl max-w-md w-full p-5 space-y-3 shadow-2xl">
+    <h3 class="font-bold text-base">Assegna <span id="aTitle" class="text-blue-600"></span></h3>
+    <input type="hidden" id="aId" />
+    <input id="aOp" type="text" placeholder="Nome Operatore (es. Mario Rossi)" class="w-full px-3 py-2 border rounded-lg text-sm" />
+    <div class="grid grid-cols-2 gap-2">
+      <select id="aDept" class="px-3 py-2 border rounded-lg text-sm">
+        <option value="Spedizioni">Spedizioni</option>
+        <option value="Ricevimento">Ricevimento</option>
+        <option value="Picking">Picking</option>
+        <option value="Carico/Scarico">Carico/Scarico</option>
+        <option value="Controllo Qualità">Controllo Qualità</option>
+      </select>
+      <select id="aShift" class="px-3 py-2 border rounded-lg text-sm">
+        <option value="Mattina">Mattina</option>
+        <option value="Pomeriggio">Pomeriggio</option>
+        <option value="Giornaliero">Giornaliero</option>
+        <option value="Notte">Notte</option>
+      </select>
+    </div>
+    <select id="aZone" class="w-full px-3 py-2 border rounded-lg text-sm">
+      <option value="Spedizioni / Ribalte">Spedizioni / Ribalte</option>
+      <option value="Ricevimento Merci">Ricevimento Merci</option>
+      <option value="Corsie Picking A-B">Corsie Picking A-B</option>
+      <option value="Corsie Picking C-D">Corsie Picking C-D</option>
+      <option value="Controllo Qualità / Resi">Controllo Qualità / Resi</option>
+      <option value="Ufficio Logistica / Ricarica">Ufficio Logistica / Ricarica</option>
+    </select>
+    <div class="flex justify-end gap-2 pt-2">
+      <button id="btnCancelAssign" type="button" class="px-3 py-2 text-xs font-bold text-slate-600">Annulla</button>
+      <button id="btnSaveAssign" type="button" class="px-4 py-2 text-xs font-bold bg-blue-600 text-white rounded-lg">Salva</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODALE CLOUD -->
+<div id="modalCloud" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl max-w-md w-full p-5 space-y-3 shadow-2xl">
+    <h3 class="font-bold text-base">☁️ Configurazione Cloud Firebase</h3>
+    <textarea id="fbInput" rows="5" placeholder='{"apiKey":"...","projectId":"..."}' class="w-full p-2.5 font-mono text-xs border rounded-lg"></textarea>
+    <div class="flex flex-wrap justify-between gap-2">
+      <button id="btnCopyLink" type="button" class="px-3 py-2 text-xs font-bold bg-emerald-600 text-white rounded-lg">🔗 Copia Link Palmari</button>
       <div class="flex gap-2">
-        <button id="tabList" type="button" class="px-3 py-2 text-xs font-bold rounded-lg bg-slate-900 text-white">📋 Lista Palmari</button>
-        <button id="tabWarehouse" type="button" class="px-3 py-2 text-xs font-bold rounded-lg bg-slate-200 text-slate-700 hover:bg-slate-300">🏭 Pianta Magazzino</button>
-        <button id="tabMap" type="button" class="px-3 py-2 text-xs font-bold rounded-lg bg-slate-200 text-slate-700 hover:bg-slate-300">🗺️ Mappa GPS</button>
-      </div>
-    </section>
-
-    <!-- VISTA 1: LISTA DISPOSITIVI -->
-    <section id="panelList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></section>
-
-    <!-- VISTA 2: PIANTA MAGAZZINO -->
-    <section id="panelWarehouse" class="hidden bg-white p-5 rounded-xl shadow-sm border border-slate-200 space-y-4">
-      <div class="flex items-center justify-between">
-        <h3 class="font-bold text-slate-800">Disposizione Palmari per Zona Magazzino</h3>
-        <span class="text-xs text-slate-500">Aggiornato in tempo reale</span>
-      </div>
-      <div id="warehouseZones" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
-    </section>
-
-    <!-- VISTA 3: MAPPA GPS -->
-    <section id="panelMap" class="hidden bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-3">
-      <div class="flex items-center justify-between">
-        <h3 class="font-bold text-slate-800">Localizzazione GPS Live</h3>
-        <span class="text-xs text-slate-500">Area Logistica Candida (Marigliano / Nola)</span>
-      </div>
-      <div id="gpsMap" class="w-full h-96 rounded-lg border border-slate-300 z-10"></div>
-    </section>
-
-  </main>
-
-  <!-- CONTENUTO MODALITÀ TERMINALE PALMARE -->
-  <main id="viewPalmare" class="hidden flex-1 flex flex-col items-center justify-center p-4">
-    <div id="palmareCard" class="w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-200 p-6 space-y-5 text-center transition-colors">
-      <div class="flex justify-between items-center border-b pb-3">
-        <span class="text-xs font-bold uppercase tracking-wider text-blue-600">Terminale Operativo</span>
-        <button id="btnExitPalmare" type="button" class="text-xs px-2.5 py-1 rounded bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold">
-          🔒 Torna a Centrale
-        </button>
-      </div>
-
-      <div>
-        <label class="block text-xs font-semibold text-slate-500 mb-1">Dispositivo Selezionato:</label>
-        <select id="selectTerminalDevice" class="w-full px-3 py-2.5 text-base font-bold border-2 border-blue-500 rounded-xl bg-blue-50 text-slate-900"></select>
-      </div>
-
-      <div id="terminalInfoBox" class="bg-slate-50 rounded-xl p-4 border border-slate-200 text-left space-y-2 text-sm">
-        <p><span class="text-slate-500">Modello:</span> <strong id="termModel">-</strong></p>
-        <p><span class="text-slate-500">Operatore:</span> <strong id="termOperator" class="text-blue-700">Non assegnato</strong></p>
-        <p><span class="text-slate-500">Reparto / Zona:</span> <strong id="termZone">-</strong></p>
-        <p><span class="text-slate-500">Batteria:</span> <strong id="termBattery">-</strong> | <span class="text-slate-500">GPS:</span> <strong id="termGps">In attesa...</strong></p>
-      </div>
-
-      <div class="space-y-2">
-        <label class="block text-xs font-semibold text-slate-500">Aggiorna la tua Zona in Magazzino:</label>
-        <select id="termUpdateZone" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg">
-          <option value="Spedizioni / Ribalte">Spedizioni / Ribalte</option>
-          <option value="Ricevimento Merci">Ricevimento Merci</option>
-          <option value="Corsie Picking A-B">Corsie Picking A-B</option>
-          <option value="Corsie Picking C-D">Corsie Picking C-D</option>
-          <option value="Controllo Qualità / Resi">Controllo Qualità / Resi</option>
-          <option value="Ufficio Logistica / Ricarica">Ufficio Logistica / Ricarica</option>
-        </select>
-      </div>
-
-      <button id="btnUnlockAudio" type="button" class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow text-sm">
-        🔊 Attiva Audio & GPS sul Palmare
-      </button>
-
-      <button id="btnStopAlarmTerminal" type="button" class="hidden w-full py-5 bg-white text-red-700 font-black text-lg rounded-xl shadow-lg border-4 border-red-700 animate-bounce">
-        🔕 HO TROVATO IL PALMARE - SPEGNI
-      </button>
-    </div>
-  </main>
-
-  <!-- MODALE ASSEGNA OPERATORE -->
-  <div id="modalAssign" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-    <div class="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
-      <h3 class="font-bold text-lg text-slate-900">Assegna Operatore — <span id="assignDeviceName" class="text-blue-600"></span></h3>
-      <input type="hidden" id="assignDeviceId" />
-      <div>
-        <label class="block text-xs font-bold text-slate-600 mb-1">Nome e Cognome Operatore</label>
-        <input id="assignOperatorInput" type="text" placeholder="Es. Marco Bianchi" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
-      </div>
-      <div class="grid grid-cols-2 gap-3">
-        <div>
-          <label class="block text-xs font-bold text-slate-600 mb-1">Reparto</label>
-          <select id="assignDeptInput" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
-            <option value="Spedizioni">Spedizioni</option>
-            <option value="Ricevimento">Ricevimento</option>
-            <option value="Picking">Picking</option>
-            <option value="Carico / Scarico">Carico / Scarico</option>
-            <option value="Controllo Qualità">Controllo Qualità</option>
-          </select>
-        </div>
-        <div>
-          <label class="block text-xs font-bold text-slate-600 mb-1">Turno</label>
-          <select id="assignShiftInput" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
-            <option value="Mattina (06-14)">Mattina (06-14)</option>
-            <option value="Pomeriggio (14-22)">Pomeriggio (14-22)</option>
-            <option value="Giornaliero">Giornaliero</option>
-            <option value="Notte">Notte</option>
-          </select>
-        </div>
-      </div>
-      <div>
-        <label class="block text-xs font-bold text-slate-600 mb-1">Zona Magazzino</label>
-        <select id="assignZoneInput" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
-          <option value="Spedizioni / Ribalte">Spedizioni / Ribalte</option>
-          <option value="Ricevimento Merci">Ricevimento Merci</option>
-          <option value="Corsie Picking A-B">Corsie Picking A-B</option>
-          <option value="Corsie Picking C-D">Corsie Picking C-D</option>
-          <option value="Controllo Qualità / Resi">Controllo Qualità / Resi</option>
-          <option value="Ufficio Logistica / Ricarica">Ufficio Logistica / Ricarica</option>
-        </select>
-      </div>
-      <div class="flex justify-end gap-2 pt-2">
-        <button id="btnCancelAssign" type="button" class="px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 rounded-lg">Annulla</button>
-        <button id="btnSaveAssign" type="button" class="px-4 py-2 text-sm font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-lg">Salva Assegnazione</button>
+        <button id="btnCloseCloud" type="button" class="px-3 py-2 text-xs font-bold text-slate-600">Chiudi</button>
+        <button id="btnSaveCloud" type="button" class="px-4 py-2 text-xs font-bold bg-indigo-600 text-white rounded-lg">Connetti</button>
       </div>
     </div>
   </div>
+</div>
 
-  <!-- MODALE CLOUD FIREBASE (SOLO ADMIN) -->
-  <div id="modalCloud" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-    <div class="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl">
-      <h3 class="font-bold text-lg text-slate-900">☁️ Configurazione Cloud Firebase (Tempo Reale)</h3>
-      <p class="text-xs text-slate-600">Incolla qui l'oggetto <strong>firebaseConfig</strong> del tuo progetto Firebase (Firestore attivo in modalità test). Poi usa il tasto <em>Copia Link Rapido</em> per aprire l'app già collegata su tutti gli 11 palmari.</p>
-      <textarea id="firebaseConfigInput" rows="6" placeholder='{"apiKey": "...", "authDomain": "...", "projectId": "...", "storageBucket": "...", "messagingSenderId": "...", "appId": "..."}' class="w-full p-3 font-mono text-xs border border-slate-300 rounded-lg"></textarea>
-      <div class="flex flex-wrap justify-between gap-2 pt-2">
-        <button id="btnCopyMagicLink" type="button" class="px-3 py-2 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg">🔗 Copia Link Rapido Palmari</button>
-        <div class="flex gap-2">
-          <button id="btnCloseCloud" type="button" class="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg">Chiudi</button>
-          <button id="btnSaveCloud" type="button" class="px-4 py-2 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg">Salva & Connetti</button>
-        </div>
+<script>
+const DEF = [
+  {id:"p03",name:"Palmare 03",model:"Android 03",operator:"",dept:"-",shift:"-",zone:"Ufficio Logistica / Ricarica",battery:95,alarm:false,lat:40.9255,lng:14.4552},
+  {id:"p05",name:"Palmare 05",model:"Android 05",operator:"",dept:"-",shift:"-",zone:"Spedizioni / Ribalte",battery:88,alarm:false,lat:40.9258,lng:14.4555},
+  {id:"p06",name:"Palmare 06",model:"Android 06",operator:"",dept:"-",shift:"-",zone:"Ricevimento Merci",battery:91,alarm:false,lat:40.9252,lng:14.4549},
+  {id:"p07",name:"Palmare 07",model:"Android 07",operator:"",dept:"-",shift:"-",zone:"Corsie Picking A-B",battery:84,alarm:false,lat:40.9260,lng:14.4558},
+  {id:"p08",name:"Palmare 08",model:"Android 08",operator:"",dept:"-",shift:"-",zone:"Corsie Picking C-D",battery:79,alarm:false,lat:40.9251,lng:14.4561},
+  {id:"p13",name:"Palmare 13",model:"Android 13",operator:"",dept:"-",shift:"-",zone:"Controllo Qualità / Resi",battery:93,alarm:false,lat:40.9256,lng:14.4547},
+  {id:"p14",name:"Palmare 14",model:"Android 14",operator:"",dept:"-",shift:"-",zone:"Ufficio Logistica / Ricarica",battery:100,alarm:false,lat:40.9254,lng:14.4550},
+  {id:"z21_1",name:"Zebra TC21 #1",model:"Zebra TC21",operator:"",dept:"-",shift:"-",zone:"Spedizioni / Ribalte",battery:96,alarm:false,lat:40.9259,lng:14.4553},
+  {id:"z21_2",name:"Zebra TC21 #2",model:"Zebra TC21",operator:"",dept:"-",shift:"-",zone:"Ricevimento Merci",battery:82,alarm:false,lat:40.9253,lng:14.4556},
+  {id:"z22_1",name:"Zebra TC22 #1",model:"Zebra TC22",operator:"",dept:"-",shift:"-",zone:"Corsie Picking A-B",battery:90,alarm:false,lat:40.9257,lng:14.4560},
+  {id:"z22_2",name:"Zebra TC22 #2",model:"Zebra TC22",operator:"",dept:"-",shift:"-",zone:"Ufficio Logistica / Ricarica",battery:98,alarm:false,lat:40.9250,lng:14.4551}
+];
+const KEY="candida_p_v4", CFG="candida_c_v4", TRM="candida_t_v4";
+let devs = JSON.parse(localStorage.getItem(KEY)||"null") || JSON.parse(JSON.stringify(DEF));
+let isAdmin=false, pinAction=null, map=null, markers=[], db=null, ctx=null, siren=null;
+
+function save(){
+  localStorage.setItem(KEY, JSON.stringify(devs));
+  render();
+  if(db) devs.forEach(d=>db.collection("candida_palmari").doc(d.id).set(d,{merge:true}).catch(()=>{}));
+}
+
+function beep(f){
+  try{
+    if(!ctx) ctx=new (window.AudioContext||window.webkitAudioContext)();
+    if(ctx.state==="suspended") ctx.resume();
+    const o=ctx.createOscillator(), g=ctx.createGain();
+    o.type="sawtooth"; o.frequency.value=f;
+    g.gain.setValueAtTime(0.4,ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.01,ctx.currentTime+0.3);
+    o.connect(g); g.connect(ctx.destination); o.start(); o.stop(ctx.currentTime+0.3);
+  }catch(e){}
+}
+
+function render(){
+  const ass=devs.filter(d=>d.operator).length;
+  document.getElementById("kpiTot").textContent=devs.length;
+  document.getElementById("kpiAss").textContent=ass;
+  document.getElementById("kpiFree").textContent=devs.length-ass;
+  document.getElementById("kpiAlm").textContent=devs.filter(d=>d.alarm).length;
+
+  const q=document.getElementById("searchBox").value.toLowerCase();
+  const f=document.getElementById("statusFilter").value;
+  const list=document.getElementById("panelList");
+  list.innerHTML="";
+  devs.filter(d=>{
+    const m=d.name.toLowerCase().includes(q)||(d.operator||"").toLowerCase().includes(q)||(d.zone||"").toLowerCase().includes(q);
+    if(!m) return false;
+    if(f==="assigned") return !!d.operator;
+    if(f==="free") return !d.operator;
+    if(f==="alarm") return d.alarm;
+    return true;
+  }).forEach(d=>{
+    const el=document.createElement("div");
+    el.className=`bg-white rounded-xl p-4 shadow-sm border-2 ${d.alarm?"border-red-600 bg-red-50":"border-slate-200"}`;
+    el.innerHTML=`
+      <div class="flex justify-between items-start">
+        <div><h4 class="font-bold text-base">${d.name}</h4><p class="text-xs text-slate-500">${d.model}</p></div>
+        <span class="text-xs font-bold px-2 py-1 rounded bg-slate-100">🔋 ${d.battery}%</span>
       </div>
-    </div>
-  </div>
+      <div class="mt-2 pt-2 border-t text-xs space-y-1">
+        <p>Operatore: <strong>${d.operator||"Disponibile"}</strong></p>
+        <p>Reparto: <span>${d.operator?d.dept+" ("+d.shift+")":"-"}</span></p>
+        <p>Zona: <span class="font-medium">${d.zone}</span></p>
+      </div>
+      <div class="mt-3 flex gap-2">
+        <button data-act="assign" data-id="${d.id}" type="button" class="flex-1 py-2 bg-blue-600 text-white text-xs font-bold rounded-lg">${d.operator?"Cambia":"Assegna"}</button>
+        ${d.operator?`<button data-act="free" data-id="${d.id}" type="button" class="py-2 px-3 bg-slate-200 text-xs font-bold rounded-lg">Libera</button>`:""}
+        <button data-act="alarm" data-id="${d.id}" type="button" class="py-2 px-3 ${d.alarm?"bg-slate-900":"bg-rose-600"} text-white text-xs font-bold rounded-lg">${d.alarm?"🔕 Stop":"🔔 Suona"}</button>
+        ${isAdmin?`<button data-act="del" data-id="${d.id}" type="button" class="py-2 px-2.5 bg-red-100 text-red-700 text-xs font-bold rounded-lg">🗑️</button>`:""}
+      </div>`;
+    list.appendChild(el);
+  });
 
-  <script>
-    // --- DATI INIZIALI DEGLI 11 PALMARI REALI ---
-    const DEFAULT_DEVICES = [
-      { id: "p03", name: "Palmare 03", model: "Android Device 03", operator: "", dept: "-", shift: "-", zone: "Ufficio Logistica / Ricarica", battery: 95, alarm: false, lat: 40.9255, lng: 14.4552, updated: "Attivo" },
-      { id: "p05", name: "Palmare 05", model: "Android Device 05", operator: "", dept: "-", shift: "-", zone: "Spedizioni / Ribalte", battery: 88, alarm: false, lat: 40.9258, lng: 14.4555, updated: "Attivo" },
-      { id: "p06", name: "Palmare 06", model: "Android Device 06", operator: "", dept: "-", shift: "-", zone: "Ricevimento Merci", battery: 91, alarm: false, lat: 40.9252, lng: 14.4549, updated: "Attivo" },
-      { id: "p07", name: "Palmare 07", model: "Android Device 07", operator: "", dept: "-", shift: "-", zone: "Corsie Picking A-B", battery: 84, alarm: false, lat: 40.9260, lng: 14.4558, updated: "Attivo" },
-      { id: "p08", name: "Palmare 08", model: "Android Device 08", operator: "", dept: "-", shift: "-", zone: "Corsie Picking C-D", battery: 79, alarm: false, lat: 40.9251, lng: 14.4561, updated: "Attivo" },
-      { id: "p13", name: "Palmare 13", model: "Android Device 13", operator: "", dept: "-", shift: "-", zone: "Controllo Qualità / Resi", battery: 93, alarm: false, lat: 40.9256, lng: 14.4547, updated: "Attivo" },
-      { id: "p14", name: "Palmare 14", model: "Android Device 14", operator: "", dept: "-", shift: "-", zone: "Ufficio Logistica / Ricarica", battery: 100, alarm: false, lat: 40.9254, lng: 14.4550, updated: "Attivo" },
-      { id: "ztc21_1", name: "Zebra TC21 #1", model: "Zebra TC21", operator: "", dept: "-", shift: "-", zone: "Spedizioni / Ribalte", battery: 96, alarm: false, lat: 40.9259, lng: 14.4553, updated: "Attivo" },
-      { id: "ztc21_2", name: "Zebra TC21 #2", model: "Zebra TC21", operator: "", dept: "-", shift: "-", zone: "Ricevimento Merci", battery: 82, alarm: false, lat: 40.9253, lng: 14.4556, updated: "Attivo" },
-      { id: "ztc22_1", name: "Zebra TC22 #1", model: "Zebra TC22", operator: "", dept: "-", shift: "-", zone: "Corsie Picking A-B", battery: 90, alarm: false, lat: 40.9257, lng: 14.4560, updated: "Attivo" },
-      { id: "ztc22_2", name: "Zebra TC22 #2", model: "Zebra TC22", operator: "", dept: "-", shift: "-", zone: "Ufficio Logistica / Ricarica", battery: 98, alarm: false, lat: 40.9250, lng: 14.4551, updated: "Attivo" }
-    ];
+  const zones=["Spedizioni / Ribalte","Ricevimento Merci","Corsie Picking A-B","Corsie Picking C-D","Controllo Qualità / Resi","Ufficio Logistica / Ricarica"];
+  const pz=document.getElementById("panelZone");
+  pz.innerHTML=zones.map(z=>{
+    const items=devs.filter(d=>d.zone===z);
+    return `<div class="bg-white p-3.5 rounded-xl border"><h4 class="font-bold text-xs mb-2">${z} (${items.length})</h4><div class="space-y-1.5">${items.map(d=>`<div class="p-2 rounded border text-xs flex justify-between items-center ${d.alarm?"bg-red-50 border-red-500":""}"><span><strong>${d.name}</strong> - ${d.operator||"Libero"}</span><button data-act="alarm" data-id="${d.id}" type="button" class="px-2 py-1 rounded bg-rose-600 text-white text-[11px] font-bold">${d.alarm?"Stop":"Suona"}</button></div>`).join("")||"<p class='text-xs text-slate-400'>Vuoto</p>"}</div></div>`;
+  }).join("");
 
-    const STORAGE_KEY = "candida_palmari_v3";
-    const PIN_KEY = "candida_admin_pin_v3";
-    const CFG_KEY = "candida_fb_cfg_v3";
-    const TERM_KEY = "candida_terminal_id_v3";
+  const sel=document.getElementById("selTermDev");
+  const tid=localStorage.getItem(TRM)||devs[0]?.id;
+  sel.innerHTML=devs.map(d=>`<option value="${d.id}" ${d.id===tid?"selected":""}>${d.name}</option>`).join("");
+  const cur=devs.find(d=>d.id===sel.value)||devs[0];
+  if(cur){
+    document.getElementById("tModel").textContent=cur.model;
+    document.getElementById("tOp").textContent=cur.operator||"Libero";
+    document.getElementById("tZone").textContent=cur.zone;
+    document.getElementById("tZoneChange").value=cur.zone;
+    const vis=!document.getElementById("viewPalmare").classList.contains("hidden");
+    document.getElementById("termCard").classList.toggle("alarm-flash", cur.alarm&&vis);
+    document.getElementById("btnStopAlarmTerm").classList.toggle("hidden", !(cur.alarm&&vis));
+    if(cur.alarm&&vis && !siren){ siren=setInterval(()=>beep(950),500); }
+    if((!cur.alarm||!vis) && siren){ clearInterval(siren); siren=null; }
+  }
+}
 
-    let devices = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null") || JSON.parse(JSON.stringify(DEFAULT_DEVICES));
-    let isAdmin = false;
-    let currentTab = "list";
-    let mapInstance = null;
-    let mapMarkers = [];
-    let audioCtx = null;
-    let sirenInterval = null;
-    let db = null;
+document.addEventListener("click",e=>{
+  const b=e.target.closest("button[data-act]");
+  if(!b) return;
+  const d=devs.find(x=>x.id===b.dataset.id);
+  if(!d) return;
+  if(b.dataset.act==="assign"){
+    document.getElementById("aId").value=d.id;
+    document.getElementById("aTitle").textContent=d.name;
+    document.getElementById("aOp").value=d.operator||"";
+    document.getElementById("modalAssign").classList.remove("hidden");
+  }else if(b.dataset.act==="free"){ d.operator=""; d.dept="-"; d.shift="-"; save(); }
+  else if(b.dataset.act==="alarm"){ d.alarm=!d.alarm; if(d.alarm) beep(950); save(); }
+  else if(b.dataset.act==="del" && isAdmin){ devs=devs.filter(x=>x.id!==d.id); save(); }
+});
 
-    // --- SALVATAGGIO STATO ---
-    function saveState() {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(devices));
-      renderAll();
-      if (db) {
-        devices.forEach(d => {
-          db.collection("candida_palmari").doc(d.id).set(d, { merge: true }).catch(() => {});
-        });
-      }
-    }
+document.getElementById("btnSaveAssign").onclick=()=>{
+  const d=devs.find(x=>x.id===document.getElementById("aId").value);
+  if(d){
+    d.operator=document.getElementById("aOp").value.trim();
+    d.dept=document.getElementById("aDept").value;
+    d.shift=document.getElementById("aShift").value;
+    d.zone=document.getElementById("aZone").value;
+    save();
+  }
+  document.getElementById("modalAssign").classList.add("hidden");
+};
+document.getElementById("btnCancelAssign").onclick=()=>document.getElementById("modalAssign").classList.add("hidden");
 
-    // --- SIRENA AUDIO (WEB AUDIO API) ---
-    function initAudio() {
-      if (!audioCtx) {
-        const AudioContext = window.AudioContext || window.webkitAudioContext;
-        if (AudioContext) audioCtx = new AudioContext();
-      }
-      if (audioCtx && audioCtx.state === "suspended") {
-        audioCtx.resume();
-      }
-    }
+function askPin(cb){
+  pinAction=cb;
+  document.getElementById("pinInput").value="";
+  document.getElementById("pinErr").classList.add("hidden");
+  document.getElementById("modalPin").classList.remove("hidden");
+  document.getElementById("pinInput").focus();
+}
+document.getElementById("btnCancelPin").onclick=()=>document.getElementById("modalPin").classList.add("hidden");
+document.getElementById("btnConfirmPin").onclick=()=>{
+  if(document.getElementById("pinInput").value==="1234"){
+    document.getElementById("modalPin").classList.add("hidden");
+    if(pinAction) pinAction();
+  }else document.getElementById("pinErr").classList.remove("hidden");
+};
 
-    function playBeepTone(freq) {
-      try {
-        initAudio();
-        if (!audioCtx) return;
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.type = "sawtooth";
-        osc.frequency.value = freq;
-        gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.35);
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        osc.start();
-        osc.stop(audioCtx.currentTime + 0.35);
-      } catch (e) {}
-    }
+document.getElementById("btnAdmin").onclick=()=>{
+  if(isAdmin) return;
+  askPin(()=>{
+    isAdmin=true;
+    document.getElementById("adminBar").classList.remove("hidden");
+    document.getElementById("roleBadge").textContent="Amministratore";
+    render();
+  });
+};
+document.getElementById("btnExitAdmin").onclick=()=>{
+  isAdmin=false;
+  document.getElementById("adminBar").classList.add("hidden");
+  document.getElementById("roleBadge").textContent="Operatore Centrale";
+  render();
+};
+document.getElementById("btnReset11").onclick=()=>{ devs=JSON.parse(JSON.stringify(DEF)); save(); };
+document.getElementById("btnAddDev").onclick=()=>{
+  const n="Palmare "+(devs.length+1);
+  devs.push({id:"d_"+Date.now(),name:n,model:"Android",operator:"",dept:"-",shift:"-",zone:"Ufficio Logistica / Ricarica",battery:100,alarm:false,lat:40.9255,lng:14.4553});
+  save();
+};
 
-    function startSiren() {
-      if (sirenInterval) return;
-      let toggle = false;
-      playBeepTone(880);
-      sirenInterval = setInterval(() => {
-        toggle = !toggle;
-        playBeepTone(toggle ? 1150 : 780);
-      }, 450);
-    }
+document.getElementById("btnPalmare").onclick=()=>{
+  document.getElementById("viewCentrale").classList.add("hidden");
+  document.getElementById("viewPalmare").classList.remove("hidden");
+  render();
+};
+document.getElementById("btnCloseTerm").onclick=()=>askPin(()=>{
+  document.getElementById("viewPalmare").classList.add("hidden");
+  document.getElementById("viewCentrale").classList.remove("hidden");
+  render();
+});
+document.getElementById("btnCentrale").onclick=()=>{
+  if(!document.getElementById("viewPalmare").classList.contains("hidden")) document.getElementById("btnCloseTerm").click();
+};
+document.getElementById("selTermDev").onchange=e=>{ localStorage.setItem(TRM,e.target.value); render(); };
+document.getElementById("tZoneChange").onchange=e=>{
+  const d=devs.find(x=>x.id===document.getElementById("selTermDev").value);
+  if(d){ d.zone=e.target.value; save(); }
+};
+document.getElementById("btnEnableSensors").onclick=()=>{
+  beep(880);
+  if("geolocation" in navigator){
+    navigator.geolocation.watchPosition(p=>{
+      const d=devs.find(x=>x.id===document.getElementById("selTermDev").value);
+      if(d){ d.lat=p.coords.latitude; d.lng=p.coords.longitude; document.getElementById("tGps").textContent="Attivo ✓"; save(); }
+    });
+  }
+};
+document.getElementById("btnStopAlarmTerm").onclick=()=>{
+  const d=devs.find(x=>x.id===document.getElementById("selTermDev").value);
+  if(d){ d.alarm=false; save(); }
+};
 
-    function stopSiren() {
-      if (sirenInterval) {
-        clearInterval(sirenInterval);
-        sirenInterval = null;
-      }
-    }
+function setTab(t){
+  document.getElementById("panelList").classList.toggle("hidden",t!=="list");
+  document.getElementById("panelZone").classList.toggle("hidden",t!=="zone");
+  document.getElementById("panelMap").classList.toggle("hidden",t!=="map");
+  if(t==="map"){
+    setTimeout(()=>{
+      if(!map && window.L){ map=L.map("gpsMap").setView([40.9255,14.4553],17); L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map); }
+      if(map){ markers.forEach(m=>map.removeLayer(m)); markers=devs.map(d=>L.marker([d.lat,d.lng]).addTo(map).bindPopup(d.name)); map.invalidateSize(); }
+    },150);
+  }
+}
+document.getElementById("tabList").onclick=()=>setTab("list");
+document.getElementById("tabZone").onclick=()=>setTab("zone");
+document.getElementById("tabMap").onclick=()=>setTab("map");
+document.getElementById("searchBox").oninput=render;
+document.getElementById("statusFilter").onchange=render;
 
-    // --- RENDER INTERFACCIA ---
-    function renderAll() {
-      // KPI
-      document.getElementById("kpiTotal").textContent = devices.length;
-      const assignedCount = devices.filter(d => d.operator && d.operator.trim() !== "").length;
-      document.getElementById("kpiAssigned").textContent = assignedCount;
-      document.getElementById("kpiFree").textContent = devices.length - assignedCount;
-      document.getElementById("kpiAlarm").textContent = devices.filter(d => d.alarm).length;
+document.getElementById("btnOpenCloud").onclick=()=>{ document.getElementById("fbInput").value=localStorage.getItem(CFG)||""; document.getElementById("modalCloud").classList.remove("hidden"); };
+document.getElementById("btnCloseCloud").onclick=()=>document.getElementById("modalCloud").classList.add("hidden");
+document.getElementById("btnSaveCloud").onclick=()=>{
+  const raw=document.getElementById("fbInput").value.trim();
+  try{ const c=JSON.parse(raw); localStorage.setItem(CFG,raw); initFb(c); document.getElementById("modalCloud").classList.add("hidden"); }catch(e){}
+};
+document.getElementById("btnCopyLink").onclick=()=>{
+  const raw=document.getElementById("fbInput").value.trim();
+  if(raw) navigator.clipboard.writeText(location.origin+location.pathname+"?cfg="+btoa(encodeURIComponent(raw)));
+};
 
-      // Lista filtrata
-      const q = document.getElementById("searchInput").value.toLowerCase();
-      const st = document.getElementById("filterStatus").value;
-      const filtered = devices.filter(d => {
-        const matchText = d.name.toLowerCase().includes(q) || d.model.toLowerCase().includes(q) || (d.operator || "").toLowerCase().includes(q) || (d.zone || "").toLowerCase().includes(q);
-        if (!matchText) return false;
-        if (st === "assigned") return !!d.operator;
-        if (st === "free") return !d.operator;
-        if (st === "alarm") return d.alarm;
-        return true;
+function initFb(cfg){
+  if(!cfg||!cfg.projectId) return;
+  const s1=document.createElement("script"); s1.src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js";
+  s1.onload=()=>{
+    const s2=document.createElement("script"); s2.src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js";
+    s2.onload=()=>{
+      if(!firebase.apps.length) firebase.initializeApp(cfg);
+      db=firebase.firestore();
+      document.getElementById("cloudStatus").textContent="● Cloud Connesso";
+      document.getElementById("cloudStatus").className="text-xs px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40";
+      db.collection("candida_palmari").onSnapshot(snap=>{
+        if(snap.empty) save();
+        else{ devs=[]; snap.forEach(doc=>devs.push(doc.data())); localStorage.setItem(KEY,JSON.stringify(devs)); render(); }
       });
+    }; document.head.appendChild(s2);
+  }; document.head.appendChild(s1);
+}
 
-      const listEl = document.getElementById("panelList");
-      listEl.innerHTML = "";
-      filtered.forEach(d => {
-        const isAssigned = d.operator && d.operator.trim() !== "";
-        const card = document.createElement("div");
-        card.className = `bg-white rounded-xl p-4 shadow-sm border-2 transition ${d.alarm ? "border-red-600 bg-red-50" : "border-slate-200"}`;
-        card.innerHTML = `
-          <div class="flex justify-between items-start gap-2">
-            <div>
-              <div class="flex items-center gap-2">
-                <h4 class="font-bold text-base text-slate-900">${d.name}</h4>
-                <span class="text-[11px] px-2 py-0.5 rounded-full font-semibold ${d.alarm ? "bg-red-600 text-white animate-pulse" : isAssigned ? "bg-blue-100 text-blue-800" : "bg-emerald-100 text-emerald-800"}">
-                  ${d.alarm ? "🚨 IN ALLARME" : isAssigned ? "In Uso" : "Disponibile"}
-                </span>
-              </div>
-              <p class="text-xs text-slate-500">${d.model}</p>
-            </div>
-            <span class="text-xs font-bold px-2 py-1 rounded bg-slate-100 text-slate-700">🔋 ${d.battery}%</span>
-          </div>
+const p=new URLSearchParams(location.search);
+if(p.has("cfg")){ try{ localStorage.setItem(CFG,decodeURIComponent(atob(p.get("cfg")))); }catch(e){} }
+const sc=localStorage.getItem(CFG);
+if(sc){ try{ initFb(JSON.parse(sc)); }catch(e){} }
 
-          <div class="mt-3 pt-3 border-t border-slate-100 text-xs space-y-1">
-            <p><span class="text-slate-400">Operatore:</span> <strong class="text-slate-800">${isAssigned ? d.operator : "Nessuno (Libero)"}</strong></p>
-            <p><span class="text-slate-400">Reparto / Turno:</span> <span class="text-slate-700">${isAssigned ? d.dept + " • " + d.shift : "-"}</span></p>
-            <p><span class="text-slate-400">Zona:</span> <span class="font-medium text-slate-700">${d.zone}</span></p>
-          </div>
-
-          <div class="mt-4 flex flex-wrap gap-2">
-            <button data-action="assign" data-id="${d.id}" type="button" class="flex-1 py-2 px-3 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg">
-              ${isAssigned ? "Cambia" : "Assegna"}
-            </button>
-            ${isAssigned ? `<button data-action="free" data-id="${d.id}" type="button" class="py-2 px-3 bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-bold rounded-lg">Libera</button>` : ""}
-            <button data-action="alarm" data-id="${d.id}" type="button" class="py-2 px-3 ${d.alarm ? "bg-slate-900 text-white" : "bg-rose-600 hover:bg-rose-700 text-white"} text-xs font-bold rounded-lg">
-              ${d.alarm ? "🔕 Stop" : "🔔 Suona"}
-            </button>
-            ${isAdmin ? `<button data-action="delete" data-id="${d.id}" type="button" class="py-2 px-2.5 bg-red-100 hover:bg-red-200 text-red-700 text-xs font-bold rounded-lg" title="Elimina">🗑️</button>` : ""}
-          </div>
-        `;
-        listEl.appendChild(card);
-      });
-
-      renderWarehouse();
-      renderTerminalView();
-      if (currentTab === "map") updateMapMarkers();
-    }
-
-    function renderWarehouse() {
-      const zones = [
-        "Spedizioni / Ribalte",
-        "Ricevimento Merci",
-        "Corsie Picking A-B",
-        "Corsie Picking C-D",
-        "Controllo Qualità / Resi",
-        "Ufficio Logistica / Ricarica"
-      ];
-      const container = document.getElementById("warehouseZones");
-      container.innerHTML = "";
-      zones.forEach(z => {
-        const inZone = devices.filter(d => d.zone === z);
-        const box = document.createElement("div");
-        box.className = "border border-slate-200 rounded-xl p-3 bg-slate-50";
-        box.innerHTML = `
-          <div class="flex justify-between items-center mb-2">
-            <h4 class="font-bold text-xs text-slate-800">${z}</h4>
-            <span class="text-xs font-bold bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">${inZone.length}</span>
-          </div>
-          <div class="space-y-1.5">
-            ${inZone.length === 0 ? `<p class="text-xs text-slate-400 italic">Nessun palmare in zona</p>` : inZone.map(d => `
-              <div class="bg-white p-2 rounded border ${d.alarm ? "border-red-500 bg-red-50" : "border-slate-200"} flex justify-between items-center text-xs">
-                <div>
-                  <strong>${d.name}</strong>
-                  <span class="block text-[11px] text-slate-500">${d.operator || "Libero"}</span>
-                </div>
-                <button data-action="alarm" data-id="${d.id}" type="button" class="px-2 py-1 rounded text-[11px] font-bold ${d.alarm ? "bg-slate-800 text-white" : "bg-rose-600 text-white"}">
-                  ${d.alarm ? "Stop" : "Suona"}
-                </button>
-              </div>
-            `).join("")}
-          </div>
-        `;
-        container.appendChild(box);
-      });
-    }
-
-    function updateMapMarkers() {
-      if (!mapInstance) {
-        mapInstance = L.map("gpsMap").setView([40.9255, 14.4553], 17);
-        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-          attribution: "© OpenStreetMap"
-        }).addTo(mapInstance);
-      }
-      mapMarkers.forEach(m => mapInstance.removeLayer(m));
-      mapMarkers = [];
-      devices.forEach(d => {
-        if (d.lat && d.lng) {
-          const marker = L.marker([d.lat, d.lng]).addTo(mapInstance);
-          marker.bindPopup(`<strong>${d.name}</strong><br/>Operatore: ${d.operator || "Libero"}<br/>Zona: ${d.zone}`);
-          mapMarkers.push(marker);
-        }
-      });
-    }
-
-    // --- GESTIONE TERMINALE PALMARE ---
-    function renderTerminalView() {
-      const sel = document.getElementById("selectTerminalDevice");
-      const savedId = localStorage.getItem(TERM_KEY) || devices[0]?.id;
-      sel.innerHTML = devices.map(d => `<option value="${d.id}" ${d.id === savedId ? "selected" : ""}>${d.name} (${d.model})</option>`).join("");
-
-      const current = devices.find(d => d.id === sel.value) || devices[0];
-      if (!current) return;
-
-      document.getElementById("termModel").textContent = current.model;
-      document.getElementById("termOperator").textContent = current.operator || "Non assegnato";
-      document.getElementById("termZone").textContent = current.zone;
-      document.getElementById("termBattery").textContent = current.battery + "%";
-      document.getElementById("termUpdateZone").value = current.zone;
-
-      const card = document.getElementById("palmareCard");
-      const stopBtn = document.getElementById("btnStopAlarmTerminal");
-      const isTerminalVisible = !document.getElementById("viewPalmare").classList.contains("hidden");
-
-      if (current.alarm && isTerminalVisible) {
-        card.classList.add("alarm-flash", "text-white");
-        stopBtn.classList.remove("hidden");
-        startSiren();
-      } else {
-        card.classList.remove("alarm-flash", "text-white");
-        stopBtn.classList.add("hidden");
-        stopSiren();
-      }
-    }
-
-    // --- EVENT DELEGATION SU PULSANTI SCHEDE ---
-    document.addEventListener("click", (e) => {
-      const btn = e.target.closest("button[data-action]");
-      if (!btn) return;
-      const action = btn.getAttribute("data-action");
-      const id = btn.getAttribute("data-id");
-      const dev = devices.find(d => d.id === id);
-      if (!dev) return;
-
-      if (action === "assign") {
-        document.getElementById("assignDeviceId").value = dev.id;
-        document.getElementById("assignDeviceName").textContent = dev.name;
-        document.getElementById("assignOperatorInput").value = dev.operator || "";
-        if (dev.dept && dev.dept !== "-") document.getElementById("assignDeptInput").value = dev.dept;
-        if (dev.shift && dev.shift !== "-") document.getElementById("assignShiftInput").value = dev.shift;
-        if (dev.zone) document.getElementById("assignZoneInput").value = dev.zone;
-        document.getElementById("modalAssign").classList.remove("hidden");
-      } else if (action === "free") {
-        dev.operator = "";
-        dev.dept = "-";
-        dev.shift = "-";
-        saveState();
-      } else if (action === "alarm") {
-        dev.alarm = !dev.alarm;
-        if (dev.alarm) playBeepTone(950);
-        saveState();
-      } else if (action === "delete" && isAdmin) {
-        if (confirm(`Eliminare definitivamente ${dev.name}?`)) {
-          devices = devices.filter(x => x.id !== id);
-          if (db) db.collection("candida_palmari").doc(id).delete().catch(() => {});
-          saveState();
-        }
-      }
-    });
-
-    // --- PULSANTI PRINCIPALI E MODALI ---
-    document.getElementById("btnSaveAssign").addEventListener("click", () => {
-      const id = document.getElementById("assignDeviceId").value;
-      const dev = devices.find(d => d.id === id);
-      if (dev) {
-        dev.operator = document.getElementById("assignOperatorInput").value.trim();
-        dev.dept = document.getElementById("assignDeptInput").value;
-        dev.shift = document.getElementById("assignShiftInput").value;
-        dev.zone = document.getElementById("assignZoneInput").value;
-        saveState();
-      }
-      document.getElementById("modalAssign").classList.add("hidden");
-    });
-
-    document.getElementById("btnCancelAssign").addEventListener("click", () => {
-      document.getElementById("modalAssign").classList.add("hidden");
-    });
-
-    // Switch Tab Lista / Pianta / Mappa
-    function switchTab(tab) {
-      currentTab = tab;
-      document.getElementById("panelList").classList.toggle("hidden", tab !== "list");
-      document.getElementById("panelWarehouse").classList.toggle("hidden", tab !== "warehouse");
-      document.getElementById("panelMap").classList.toggle("hidden", tab !== "map");
-
-      document.getElementById("tabList").className = tab === "list" ? "px-3 py-2 text-xs font-bold rounded-lg bg-slate-900 text-white" : "px-3 py-2 text-xs font-bold rounded-lg bg-slate-200 text-slate-700";
-      document.getElementById("tabWarehouse").className = tab === "warehouse" ? "px-3 py-2 text-xs font-bold rounded-lg bg-slate-900 text-white" : "px-3 py-2 text-xs font-bold rounded-lg bg-slate-200 text-slate-700";
-      document.getElementById("tabMap").className = tab === "map" ? "px-3 py-2 text-xs font-bold rounded-lg bg-slate-900 text-white" : "px-3 py-2 text-xs font-bold rounded-lg bg-slate-200 text-slate-700";
-
-      if (tab === "map") {
-        setTimeout(() => {
-          updateMapMarkers();
-          if (mapInstance) mapInstance.invalidateSize();
-        }, 150);
-      }
-    }
-
-    document.getElementById("tabList").addEventListener("click", () => switchTab("list"));
-    document.getElementById("tabWarehouse").addEventListener("click", () => switchTab("warehouse"));
-    document.getElementById("tabMap").addEventListener("click", () => switchTab("map"));
-    document.getElementById("searchInput").addEventListener("input", renderAll);
-    document.getElementById("filterStatus").addEventListener("change", renderAll);
-
-    // Ruoli: Admin / Logistica / Palmare
-    function getAdminPin() {
-      return localStorage.getItem(PIN_KEY) || "1234";
-    }
-
-    document.getElementById("btnModeAdmin").addEventListener("click", () => {
-      if (isAdmin) return;
-      const pin = prompt("Inserisci PIN Amministratore (predefinito: 1234):");
-      if (pin === getAdminPin()) {
-        isAdmin = true;
-        document.getElementById("adminToolbar").classList.remove("hidden");
-        document.getElementById("roleBadge").textContent = "Amministratore Supremo";
-        document.getElementById("roleBadge").className = "text-amber-400 font-bold";
-        renderAll();
-      } else if (pin !== null) {
-        alert("PIN errato.");
-      }
-    });
-
-    document.getElementById("btnLogoutAdmin").addEventListener("click", () => {
-      isAdmin = false;
-      document.getElementById("adminToolbar").classList.add("hidden");
-      document.getElementById("roleBadge").textContent = "Operatore Centrale";
-      document.getElementById("roleBadge").className = "text-emerald-400 font-semibold";
-      renderAll();
-    });
-
-    document.getElementById("btnChangePin").addEventListener("click", () => {
-      const newPin = prompt("Inserisci il nuovo PIN Amministratore (minimo 4 cifre):");
-      if (newPin && newPin.trim().length >= 4) {
-        localStorage.setItem(PIN_KEY, newPin.trim());
-        alert("Nuovo PIN salvato con successo!");
-      }
-    });
-
-    document.getElementById("btnAddDevice").addEventListener("click", () => {
-      const name = prompt("Nome nuovo palmare (es. Palmare 15):");
-      if (!name) return;
-      const model = prompt("Modello dispositivo (es. Zebra TC22):", "Android Device") || "Android Device";
-      devices.push({
-        id: "dev_" + Date.now(),
-        name: name.trim(),
-        model: model.trim(),
-        operator: "",
-        dept: "-",
-        shift: "-",
-        zone: "Ufficio Logistica / Ricarica",
-        battery: 100,
-        alarm: false,
-        lat: 40.9255,
-        lng: 14.4553,
-        updated: "Nuovo"
-      });
-      saveState();
-    });
-
-    document.getElementById("btnReset11").addEventListener("click", () => {
-      if (confirm("Ripristinare l'elenco ufficiale degli 11 palmari aziendali?")) {
-        devices = JSON.parse(JSON.stringify(DEFAULT_DEVICES));
-        saveState();
-      }
-    });
-
-    // Switch Modalità Palmare / Centrale
-    document.getElementById("btnModePalmare").addEventListener("click", () => {
-      document.getElementById("viewCentrale").classList.add("hidden");
-      document.getElementById("viewPalmare").classList.remove("hidden");
-      renderTerminalView();
-    });
-
-    document.getElementById("btnModeLogistica").addEventListener("click", () => {
-      if (!document.getElementById("viewPalmare").classList.contains("hidden")) {
-        const pin = prompt("Inserisci PIN Admin per uscire dalla Modalità Palmare:");
-        if (pin !== getAdminPin()) return;
-      }
-      stopSiren();
-      document.getElementById("viewPalmare").classList.add("hidden");
-      document.getElementById("viewCentrale").classList.remove("hidden");
-      renderAll();
-    });
-
-    document.getElementById("btnExitPalmare").addEventListener("click", () => {
-      const pin = prompt("Inserisci PIN Admin per tornare alla Centrale:");
-      if (pin === getAdminPin()) {
-        stopSiren();
-        document.getElementById("viewPalmare").classList.add("hidden");
-        document.getElementById("viewCentrale").classList.remove("hidden");
-        renderAll();
-      } else if (pin !== null) {
-        alert("PIN non valido.");
-      }
-    });
-
-    document.getElementById("selectTerminalDevice").addEventListener("change", (e) => {
-      localStorage.setItem(TERM_KEY, e.target.value);
-      renderTerminalView();
-    });
-
-    document.getElementById("termUpdateZone").addEventListener("change", (e) => {
-      const id = document.getElementById("selectTerminalDevice").value;
-      const dev = devices.find(d => d.id === id);
-      if (dev) {
-        dev.zone = e.target.value;
-        saveState();
-      }
-    });
-
-    document.getElementById("btnUnlockAudio").addEventListener("click", () => {
-      initAudio();
-      playBeepTone(880);
-      if ("geolocation" in navigator) {
-        navigator.geolocation.watchPosition((pos) => {
-          const id = document.getElementById("selectTerminalDevice").value;
-          const dev = devices.find(d => d.id === id);
-          if (dev) {
-            dev.lat = pos.coords.latitude;
-            dev.lng = pos.coords.longitude;
-            document.getElementById("termGps").textContent = "Attivo ✓";
-            saveState();
-          }
-        }, () => {
-          document.getElementById("termGps").textContent = "Permesso negato";
-        });
-      }
-      alert("Audio sirena sbloccato e tracciamento GPS attivato su questo palmare!");
-    });
-
-    document.getElementById("btnStopAlarmTerminal").addEventListener("click", () => {
-      const id = document.getElementById("selectTerminalDevice").value;
-      const dev = devices.find(d => d.id === id);
-      if (dev) {
-        dev.alarm = false;
-        stopSiren();
-        saveState();
-      }
-    });
-
-    // --- CLOUD FIREBASE DINAMICO ---
-    document.getElementById("btnOpenCloud").addEventListener("click", () => {
-      document.getElementById("firebaseConfigInput").value = localStorage.getItem(CFG_KEY) || "";
-      document.getElementById("modalCloud").classList.remove("hidden");
-    });
-
-    document.getElementById("btnCloseCloud").addEventListener("click", () => {
-      document.getElementById("modalCloud").classList.add("hidden");
-    });
-
-    document.getElementById("btnSaveCloud").addEventListener("click", () => {
-      const raw = document.getElementById("firebaseConfigInput").value.trim();
-      try {
-        JSON.parse(raw);
-        localStorage.set
+render();
+</script>
+</body>
+</html>
