@@ -3,10 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Candida Logistica - Palmari</title>
+  <title>Candida Logistica - Palmari (Supabase)</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     @keyframes flashRed { 0%,100%{background:#dc2626} 50%{background:#7f1d1d} }
     .alarm-flash { animation: flashRed 0.7s infinite; }
@@ -36,11 +37,11 @@
   <section id="adminBar" class="hidden bg-amber-50 border border-amber-300 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
     <div>
       <p class="font-bold text-amber-900 text-sm">Pannello Amministratore (Leandro)</p>
-      <p class="text-xs text-amber-700">Configura cloud Firebase, aggiungi dispositivi o ripristina elenco.</p>
+      <p class="text-xs text-amber-700">Configura Supabase, aggiungi dispositivi o ripristina elenco.</p>
     </div>
     <div class="flex flex-wrap gap-2">
-      <button id="btnOpenCloud" type="button" class="px-3 py-2 bg-indigo-600 text-white text-xs font-bold rounded-lg">☁️ Configura Cloud</button>
-      <button id="btnAddDev" type="button" class="px-3 py-2 bg-emerald-600 text-white text-xs font-bold rounded-lg">+ Palmare</button>
+      <button id="btnOpenCloud" type="button" class="px-3 py-2 bg-emerald-600 text-white text-xs font-bold rounded-lg">⚡ Configura Supabase</button>
+      <button id="btnAddDev" type="button" class="px-3 py-2 bg-blue-600 text-white text-xs font-bold rounded-lg">+ Palmare</button>
       <button id="btnReset11" type="button" class="px-3 py-2 bg-rose-600 text-white text-xs font-bold rounded-lg">↺ Ripristina 11</button>
       <button id="btnExitAdmin" type="button" class="px-3 py-2 bg-white border border-amber-400 text-amber-900 text-xs font-bold rounded-lg">Esci Admin</button>
     </div>
@@ -101,7 +102,6 @@
   </div>
 </main>
 
-<!-- MODALE PIN INTERNA -->
 <div id="modalPin" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
   <div class="bg-white rounded-2xl max-w-xs w-full p-5 space-y-3 shadow-2xl">
     <h3 class="font-bold text-base">Inserisci PIN Amministratore</h3>
@@ -115,7 +115,6 @@
   </div>
 </div>
 
-<!-- MODALE ASSEGNA -->
 <div id="modalAssign" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
   <div class="bg-white rounded-2xl max-w-md w-full p-5 space-y-3 shadow-2xl">
     <h3 class="font-bold text-base">Assegna <span id="aTitle" class="text-blue-600"></span></h3>
@@ -151,16 +150,24 @@
   </div>
 </div>
 
-<!-- MODALE CLOUD -->
 <div id="modalCloud" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
   <div class="bg-white rounded-2xl max-w-md w-full p-5 space-y-3 shadow-2xl">
-    <h3 class="font-bold text-base">☁️ Configurazione Cloud Firebase</h3>
-    <textarea id="fbInput" rows="5" placeholder='{"apiKey":"...","projectId":"..."}' class="w-full p-2.5 font-mono text-xs border rounded-lg"></textarea>
-    <div class="flex flex-wrap justify-between gap-2">
-      <button id="btnCopyLink" type="button" class="px-3 py-2 text-xs font-bold bg-emerald-600 text-white rounded-lg">🔗 Copia Link Palmari</button>
+    <h3 class="font-bold text-base">⚡ Configurazione Supabase (Tempo Reale)</h3>
+    <p class="text-xs text-slate-500">Inserisci i dati da <strong>Project Settings → API</strong> su Supabase:</p>
+    <div>
+      <label class="block text-xs font-bold text-slate-600 mb-1">Project URL</label>
+      <input id="sbUrlInput" type="url" placeholder="https://xyzcompany.supabase.co" class="w-full px-3 py-2 font-mono text-xs border rounded-lg" />
+    </div>
+    <div>
+      <label class="block text-xs font-bold text-slate-600 mb-1">Anon Public Key</label>
+      <input id="sbKeyInput" type="text" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6..." class="w-full px-3 py-2 font-mono text-xs border rounded-lg" />
+    </div>
+    <p id="sbFeedback" class="hidden text-xs font-semibold text-emerald-700 bg-emerald-50 p-2 rounded"></p>
+    <div class="flex flex-wrap justify-between gap-2 pt-1">
+      <button id="btnCopyLink" type="button" class="px-3 py-2 text-xs font-bold bg-blue-600 text-white rounded-lg">🔗 Copia Link Palmari</button>
       <div class="flex gap-2">
         <button id="btnCloseCloud" type="button" class="px-3 py-2 text-xs font-bold text-slate-600">Chiudi</button>
-        <button id="btnSaveCloud" type="button" class="px-4 py-2 text-xs font-bold bg-indigo-600 text-white rounded-lg">Connetti</button>
+        <button id="btnSaveCloud" type="button" class="px-4 py-2 text-xs font-bold bg-emerald-600 text-white rounded-lg">Connetti</button>
       </div>
     </div>
   </div>
@@ -180,14 +187,29 @@ const DEF = [
   {id:"z22_1",name:"Zebra TC22 #1",model:"Zebra TC22",operator:"",dept:"-",shift:"-",zone:"Corsie Picking A-B",battery:90,alarm:false,lat:40.9257,lng:14.4560},
   {id:"z22_2",name:"Zebra TC22 #2",model:"Zebra TC22",operator:"",dept:"-",shift:"-",zone:"Ufficio Logistica / Ricarica",battery:98,alarm:false,lat:40.9250,lng:14.4551}
 ];
-const KEY="candida_p_v4", CFG="candida_c_v4", TRM="candida_t_v4";
+const KEY="candida_p_sb1", CFG="candida_sb_cfg1", TRM="candida_t_sb1";
 let devs = JSON.parse(localStorage.getItem(KEY)||"null") || JSON.parse(JSON.stringify(DEF));
-let isAdmin=false, pinAction=null, map=null, markers=[], db=null, ctx=null, siren=null;
+let isAdmin=false, pinAction=null, map=null, markers=[], sb=null, ctx=null, siren=null;
 
-function save(){
+async function syncRow(d){
+  if(!sb) return;
+  try{
+    await sb.from("candida_palmari").upsert({
+      id:d.id, name:d.name, model:d.model, operator:d.operator||"",
+      dept:d.dept||"-", shift:d.shift||"-", zone:d.zone||"Ufficio Logistica / Ricarica",
+      battery:d.battery||100, alarm:!!d.alarm, lat:d.lat||40.9255, lng:d.lng||14.4553,
+      updated_at:new Date().toISOString()
+    });
+  }catch(e){}
+}
+
+function save(singleDev){
   localStorage.setItem(KEY, JSON.stringify(devs));
   render();
-  if(db) devs.forEach(d=>db.collection("candida_palmari").doc(d.id).set(d,{merge:true}).catch(()=>{}));
+  if(sb){
+    if(singleDev) syncRow(singleDev);
+    else devs.forEach(d=>syncRow(d));
+  }
 }
 
 function beep(f){
@@ -266,7 +288,7 @@ function render(){
   }
 }
 
-document.addEventListener("click",e=>{
+document.addEventListener("click",async e=>{
   const b=e.target.closest("button[data-act]");
   if(!b) return;
   const d=devs.find(x=>x.id===b.dataset.id);
@@ -276,9 +298,13 @@ document.addEventListener("click",e=>{
     document.getElementById("aTitle").textContent=d.name;
     document.getElementById("aOp").value=d.operator||"";
     document.getElementById("modalAssign").classList.remove("hidden");
-  }else if(b.dataset.act==="free"){ d.operator=""; d.dept="-"; d.shift="-"; save(); }
-  else if(b.dataset.act==="alarm"){ d.alarm=!d.alarm; if(d.alarm) beep(950); save(); }
-  else if(b.dataset.act==="del" && isAdmin){ devs=devs.filter(x=>x.id!==d.id); save(); }
+  }else if(b.dataset.act==="free"){ d.operator=""; d.dept="-"; d.shift="-"; save(d); }
+  else if(b.dataset.act==="alarm"){ d.alarm=!d.alarm; if(d.alarm) beep(950); save(d); }
+  else if(b.dataset.act==="del" && isAdmin){
+    devs=devs.filter(x=>x.id!==d.id);
+    if(sb) try{ await sb.from("candida_palmari").delete().eq("id",d.id); }catch(err){}
+    save();
+  }
 });
 
 document.getElementById("btnSaveAssign").onclick=()=>{
@@ -288,7 +314,7 @@ document.getElementById("btnSaveAssign").onclick=()=>{
     d.dept=document.getElementById("aDept").value;
     d.shift=document.getElementById("aShift").value;
     d.zone=document.getElementById("aZone").value;
-    save();
+    save(d);
   }
   document.getElementById("modalAssign").classList.add("hidden");
 };
@@ -327,8 +353,9 @@ document.getElementById("btnExitAdmin").onclick=()=>{
 document.getElementById("btnReset11").onclick=()=>{ devs=JSON.parse(JSON.stringify(DEF)); save(); };
 document.getElementById("btnAddDev").onclick=()=>{
   const n="Palmare "+(devs.length+1);
-  devs.push({id:"d_"+Date.now(),name:n,model:"Android",operator:"",dept:"-",shift:"-",zone:"Ufficio Logistica / Ricarica",battery:100,alarm:false,lat:40.9255,lng:14.4553});
-  save();
+  const nd={id:"d_"+Date.now(),name:n,model:"Android",operator:"",dept:"-",shift:"-",zone:"Ufficio Logistica / Ricarica",battery:100,alarm:false,lat:40.9255,lng:14.4553};
+  devs.push(nd);
+  save(nd);
 };
 
 document.getElementById("btnPalmare").onclick=()=>{
@@ -347,20 +374,26 @@ document.getElementById("btnCentrale").onclick=()=>{
 document.getElementById("selTermDev").onchange=e=>{ localStorage.setItem(TRM,e.target.value); render(); };
 document.getElementById("tZoneChange").onchange=e=>{
   const d=devs.find(x=>x.id===document.getElementById("selTermDev").value);
-  if(d){ d.zone=e.target.value; save(); }
+  if(d){ d.zone=e.target.value; save(d); }
 };
 document.getElementById("btnEnableSensors").onclick=()=>{
   beep(880);
   if("geolocation" in navigator){
     navigator.geolocation.watchPosition(p=>{
       const d=devs.find(x=>x.id===document.getElementById("selTermDev").value);
-      if(d){ d.lat=p.coords.latitude; d.lng=p.coords.longitude; document.getElementById("tGps").textContent="Attivo ✓"; save(); }
+      if(d){ d.lat=p.coords.latitude; d.lng=p.coords.longitude; document.getElementById("tGps").textContent="Attivo ✓"; save(d); }
+    });
+  }
+  if("getBattery" in navigator){
+    navigator.getBattery().then(b=>{
+      const d=devs.find(x=>x.id===document.getElementById("selTermDev").value);
+      if(d){ d.battery=Math.round(b.level*100); save(d); }
     });
   }
 };
 document.getElementById("btnStopAlarmTerm").onclick=()=>{
   const d=devs.find(x=>x.id===document.getElementById("selTermDev").value);
-  if(d){ d.alarm=false; save(); }
+  if(d){ d.alarm=false; save(d); }
 };
 
 function setTab(t){
@@ -370,7 +403,7 @@ function setTab(t){
   if(t==="map"){
     setTimeout(()=>{
       if(!map && window.L){ map=L.map("gpsMap").setView([40.9255,14.4553],17); L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map); }
-      if(map){ markers.forEach(m=>map.removeLayer(m)); markers=devs.map(d=>L.marker([d.lat,d.lng]).addTo(map).bindPopup(d.name)); map.invalidateSize(); }
+      if(map){ markers.forEach(m=>map.removeLayer(m)); markers=devs.map(d=>L.marker([d.lat,d.lng]).addTo(map).bindPopup(d.name+" ("+(d.operator||"Libero")+")")); map.invalidateSize(); }
     },150);
   }
 }
@@ -380,39 +413,71 @@ document.getElementById("tabMap").onclick=()=>setTab("map");
 document.getElementById("searchBox").oninput=render;
 document.getElementById("statusFilter").onchange=render;
 
-document.getElementById("btnOpenCloud").onclick=()=>{ document.getElementById("fbInput").value=localStorage.getItem(CFG)||""; document.getElementById("modalCloud").classList.remove("hidden"); };
+document.getElementById("btnOpenCloud").onclick=()=>{
+  const cur=JSON.parse(localStorage.getItem(CFG)||"{}");
+  document.getElementById("sbUrlInput").value=cur.url||"";
+  document.getElementById("sbKeyInput").value=cur.key||"";
+  document.getElementById("sbFeedback").classList.add("hidden");
+  document.getElementById("modalCloud").classList.remove("hidden");
+};
 document.getElementById("btnCloseCloud").onclick=()=>document.getElementById("modalCloud").classList.add("hidden");
-document.getElementById("btnSaveCloud").onclick=()=>{
-  const raw=document.getElementById("fbInput").value.trim();
-  try{ const c=JSON.parse(raw); localStorage.setItem(CFG,raw); initFb(c); document.getElementById("modalCloud").classList.add("hidden"); }catch(e){}
+document.getElementById("btnSaveCloud").onclick=async ()=>{
+  const url=document.getElementById("sbUrlInput").value.trim();
+  const key=document.getElementById("sbKeyInput").value.trim();
+  if(!url||!key) return;
+  const obj={url,key};
+  localStorage.setItem(CFG,JSON.stringify(obj));
+  await initSb(obj);
+  document.getElementById("modalCloud").classList.add("hidden");
 };
 document.getElementById("btnCopyLink").onclick=()=>{
-  const raw=document.getElementById("fbInput").value.trim();
-  if(raw) navigator.clipboard.writeText(location.origin+location.pathname+"?cfg="+btoa(encodeURIComponent(raw)));
+  const url=document.getElementById("sbUrlInput").value.trim();
+  const key=document.getElementById("sbKeyInput").value.trim();
+  if(!url||!key) return;
+  const link=location.origin+location.pathname+"?sb="+btoa(encodeURIComponent(JSON.stringify({url,key})));
+  navigator.clipboard.writeText(link).then(()=>{
+    const fb=document.getElementById("sbFeedback");
+    fb.textContent="Link rapido copiato! Aprilo sui palmari e sul PC logistica.";
+    fb.classList.remove("hidden");
+  });
 };
 
-function initFb(cfg){
-  if(!cfg||!cfg.projectId) return;
-  const s1=document.createElement("script"); s1.src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js";
-  s1.onload=()=>{
-    const s2=document.createElement("script"); s2.src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js";
-    s2.onload=()=>{
-      if(!firebase.apps.length) firebase.initializeApp(cfg);
-      db=firebase.firestore();
-      document.getElementById("cloudStatus").textContent="● Cloud Connesso";
-      document.getElementById("cloudStatus").className="text-xs px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40";
-      db.collection("candida_palmari").onSnapshot(snap=>{
-        if(snap.empty) save();
-        else{ devs=[]; snap.forEach(doc=>devs.push(doc.data())); localStorage.setItem(KEY,JSON.stringify(devs)); render(); }
-      });
-    }; document.head.appendChild(s2);
-  }; document.head.appendChild(s1);
+async function initSb(cfg){
+  if(!cfg||!cfg.url||!cfg.key||!window.supabase) return;
+  try{
+    sb=window.supabase.createClient(cfg.url,cfg.key);
+    const {data,error}=await sb.from("candida_palmari").select("*");
+    if(error) throw error;
+    document.getElementById("cloudStatus").textContent="● Supabase Live";
+    document.getElementById("cloudStatus").className="text-xs px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40";
+    if(!data || data.length===0){
+      save();
+    }else{
+      devs=data;
+      localStorage.setItem(KEY,JSON.stringify(devs));
+      render();
+    }
+    sb.channel("candida_palmari_live")
+      .on("postgres_changes",{event:"*",schema:"public",table:"candida_palmari"},payload=>{
+        if(payload.eventType==="DELETE"){
+          devs=devs.filter(x=>x.id!==payload.old.id);
+        }else{
+          const row=payload.new;
+          const idx=devs.findIndex(x=>x.id===row.id);
+          if(idx>=0) devs[idx]=row; else devs.push(row);
+        }
+        localStorage.setItem(KEY,JSON.stringify(devs));
+        render();
+      }).subscribe();
+  }catch(e){
+    document.getElementById("cloudStatus").textContent="● Errore Tabella Supabase";
+  }
 }
 
 const p=new URLSearchParams(location.search);
-if(p.has("cfg")){ try{ localStorage.setItem(CFG,decodeURIComponent(atob(p.get("cfg")))); }catch(e){} }
+if(p.has("sb")){ try{ localStorage.setItem(CFG,decodeURIComponent(atob(p.get("sb")))); }catch(e){} }
 const sc=localStorage.getItem(CFG);
-if(sc){ try{ initFb(JSON.parse(sc)); }catch(e){} }
+if(sc){ try{ initSb(JSON.parse(sc)); }catch(e){} }
 
 render();
 </script>
