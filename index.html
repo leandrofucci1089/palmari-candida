@@ -15,16 +15,16 @@
 </head>
 <body class="bg-slate-100 text-slate-800 min-h-screen flex flex-col">
 
-<header class="bg-slate-900 text-white shadow sticky top-0 z-40">
+<header id="appHeader" class="bg-slate-900 text-white shadow sticky top-0 z-40">
   <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-2">
     <div class="flex items-center gap-2.5">
       <span class="bg-blue-600 p-2 rounded-lg text-lg">📦</span>
       <div>
         <h1 class="font-bold text-base sm:text-lg leading-tight">Candida Logistica</h1>
-        <p class="text-xs text-slate-400">11 Palmari • <span id="roleBadge" class="text-emerald-400 font-semibold">Operatore Centrale</span></p>
+        <p class="text-xs text-slate-400"><span id="headerCount">11 Palmari</span> • <span id="roleBadge" class="text-emerald-400 font-semibold">Operatore Centrale</span></p>
       </div>
     </div>
-    <div class="flex flex-wrap items-center gap-2">
+    <div id="headerControls" class="flex flex-wrap items-center gap-2">
       <span id="cloudStatus" class="text-xs px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40">● Locale</span>
       <button id="btnCentrale" type="button" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-blue-600 text-white">Centrale</button>
       <button id="btnPalmare" type="button" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-700 hover:bg-slate-600 text-white">Modalità Palmare</button>
@@ -37,7 +37,7 @@
   <section id="adminBar" class="hidden bg-amber-50 border border-amber-300 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
     <div>
       <p class="font-bold text-amber-900 text-sm">Pannello Amministratore (Leandro)</p>
-      <p class="text-xs text-amber-700">Configura Supabase, aggiungi dispositivi o ripristina elenco.</p>
+      <p class="text-xs text-amber-700">Configura Supabase, aggiungi/elimina dispositivi o ripristina elenco.</p>
     </div>
     <div class="flex flex-wrap gap-2">
       <button id="btnOpenCloud" type="button" class="px-3 py-2 bg-emerald-600 text-white text-xs font-bold rounded-lg">⚡ Configura Supabase</button>
@@ -56,7 +56,7 @@
 
   <section class="bg-white p-3.5 rounded-xl shadow-sm border flex flex-wrap items-center justify-between gap-2">
     <div class="flex flex-wrap gap-2 flex-1">
-      <input id="searchBox" type="text" placeholder="Cerca palmare, operatore, zona..." class="px-3 py-2 text-sm border rounded-lg w-full sm:w-64" />
+      <input id="searchBox" type="text" placeholder="Cerca palmare o operatore..." class="px-3 py-2 text-sm border rounded-lg w-full sm:w-64" />
       <select id="statusFilter" class="px-3 py-2 text-sm border rounded-lg bg-white">
         <option value="all">Tutti gli stati</option>
         <option value="assigned">Solo Assegnati</option>
@@ -66,39 +66,31 @@
     </div>
     <div class="flex gap-2">
       <button id="tabList" type="button" class="px-3 py-2 text-xs font-bold rounded-lg bg-slate-900 text-white">📋 Lista</button>
-      <button id="tabZone" type="button" class="px-3 py-2 text-xs font-bold rounded-lg bg-slate-200 text-slate-700">🏭 Pianta</button>
       <button id="tabMap" type="button" class="px-3 py-2 text-xs font-bold rounded-lg bg-slate-200 text-slate-700">🗺️ Mappa GPS</button>
     </div>
   </section>
 
   <section id="panelList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></section>
-  <section id="panelZone" class="hidden grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"></section>
-  <section id="panelMap" class="hidden bg-white p-4 rounded-xl border"><div id="gpsMap" class="w-full h-96 rounded-lg"></div></section>
+  <section id="panelMap" class="hidden bg-white p-4 rounded-xl border space-y-2">
+    <p id="mapFocusInfo" class="text-xs text-slate-500 font-medium">Posizione GPS palmari in tempo reale</p>
+    <div id="gpsMap" class="w-full h-96 rounded-lg"></div>
+  </section>
 </main>
 
 <main id="viewPalmare" class="hidden flex-1 flex items-center justify-center p-4">
   <div id="termCard" class="w-full max-w-md bg-white rounded-2xl shadow-xl border p-6 space-y-4 text-center">
-    <div class="flex justify-between items-center border-b pb-3">
-      <span class="text-xs font-bold text-blue-600 uppercase">Terminale Palmare</span>
-      <button id="btnCloseTerm" type="button" class="text-xs px-2.5 py-1 rounded bg-slate-200 font-bold">🔒 Esci</button>
+    <div class="border-b pb-3">
+      <span class="text-xs font-bold text-blue-600 uppercase tracking-wider">Dispositivo Bloccato • Solo Allarme &amp; GPS</span>
+      <h2 id="tName" class="text-2xl font-black text-slate-900 mt-1">-</h2>
     </div>
-    <select id="selTermDev" class="w-full p-2.5 font-bold border-2 border-blue-500 rounded-xl bg-blue-50"></select>
-    <div class="bg-slate-50 rounded-xl p-4 border text-left text-sm space-y-1.5 text-slate-800">
+    <div class="bg-slate-50 rounded-xl p-4 border text-left text-sm space-y-2 text-slate-800">
       <p>Modello: <strong id="tModel">-</strong></p>
-      <p>Operatore: <strong id="tOp" class="text-blue-700">Libero</strong></p>
-      <p>Zona: <strong id="tZone">-</strong></p>
-      <p>GPS: <strong id="tGps">In attesa</strong></p>
+      <p>Operatore assegnato: <strong id="tOp" class="text-blue-700">Libero</strong></p>
+      <p>Stato GPS: <strong id="tGps">Attivo</strong></p>
+      <p>Ultimo aggiornamento: <strong id="tUpdated">-</strong></p>
     </div>
-    <select id="tZoneChange" class="w-full p-2 text-sm border rounded-lg">
-      <option value="Spedizioni / Ribalte">Spedizioni / Ribalte</option>
-      <option value="Ricevimento Merci">Ricevimento Merci</option>
-      <option value="Corsie Picking A-B">Corsie Picking A-B</option>
-      <option value="Corsie Picking C-D">Corsie Picking C-D</option>
-      <option value="Controllo Qualità / Resi">Controllo Qualità / Resi</option>
-      <option value="Ufficio Logistica / Ricarica">Ufficio Logistica / Ricarica</option>
-    </select>
-    <button id="btnEnableSensors" type="button" class="w-full py-3 bg-emerald-600 text-white font-bold rounded-xl text-sm">🔊 Attiva Sirena & GPS</button>
-    <button id="btnStopAlarmTerm" type="button" class="hidden w-full py-4 bg-white text-red-700 font-black text-base rounded-xl border-4 border-red-700">🔕 SPEGNI ALLARME</button>
+    <button id="btnEnableSensors" type="button" class="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-sm">🔊 Attiva Sirena &amp; GPS</button>
+    <button id="btnStopAlarmTerm" type="button" class="hidden w-full py-4 bg-white text-red-700 font-black text-base rounded-xl border-4 border-red-700">🔕 DISATTIVA SUONO</button>
   </div>
 </main>
 
@@ -117,7 +109,7 @@
 
 <div id="modalAssign" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
   <div class="bg-white rounded-2xl max-w-md w-full p-5 space-y-3 shadow-2xl">
-    <h3 class="font-bold text-base">Assegna <span id="aTitle" class="text-blue-600"></span></h3>
+    <h3 class="font-bold text-base">Assegna Operatore — <span id="aTitle" class="text-blue-600"></span></h3>
     <input type="hidden" id="aId" />
     <input id="aOp" type="text" placeholder="Nome Operatore (es. Mario Rossi)" class="w-full px-3 py-2 border rounded-lg text-sm" />
     <div class="grid grid-cols-2 gap-2">
@@ -135,14 +127,6 @@
         <option value="Notte">Notte</option>
       </select>
     </div>
-    <select id="aZone" class="w-full px-3 py-2 border rounded-lg text-sm">
-      <option value="Spedizioni / Ribalte">Spedizioni / Ribalte</option>
-      <option value="Ricevimento Merci">Ricevimento Merci</option>
-      <option value="Corsie Picking A-B">Corsie Picking A-B</option>
-      <option value="Corsie Picking C-D">Corsie Picking C-D</option>
-      <option value="Controllo Qualità / Resi">Controllo Qualità / Resi</option>
-      <option value="Ufficio Logistica / Ricarica">Ufficio Logistica / Ricarica</option>
-    </select>
     <div class="flex justify-end gap-2 pt-2">
       <button id="btnCancelAssign" type="button" class="px-3 py-2 text-xs font-bold text-slate-600">Annulla</button>
       <button id="btnSaveAssign" type="button" class="px-4 py-2 text-xs font-bold bg-blue-600 text-white rounded-lg">Salva</button>
@@ -175,30 +159,40 @@
 
 <script>
 const DEF = [
-  {id:"p03",name:"Palmare 03",model:"Android 03",operator:"",dept:"-",shift:"-",zone:"Ufficio Logistica / Ricarica",battery:95,alarm:false,lat:40.9255,lng:14.4552},
-  {id:"p05",name:"Palmare 05",model:"Android 05",operator:"",dept:"-",shift:"-",zone:"Spedizioni / Ribalte",battery:88,alarm:false,lat:40.9258,lng:14.4555},
-  {id:"p06",name:"Palmare 06",model:"Android 06",operator:"",dept:"-",shift:"-",zone:"Ricevimento Merci",battery:91,alarm:false,lat:40.9252,lng:14.4549},
-  {id:"p07",name:"Palmare 07",model:"Android 07",operator:"",dept:"-",shift:"-",zone:"Corsie Picking A-B",battery:84,alarm:false,lat:40.9260,lng:14.4558},
-  {id:"p08",name:"Palmare 08",model:"Android 08",operator:"",dept:"-",shift:"-",zone:"Corsie Picking C-D",battery:79,alarm:false,lat:40.9251,lng:14.4561},
-  {id:"p13",name:"Palmare 13",model:"Android 13",operator:"",dept:"-",shift:"-",zone:"Controllo Qualità / Resi",battery:93,alarm:false,lat:40.9256,lng:14.4547},
-  {id:"p14",name:"Palmare 14",model:"Android 14",operator:"",dept:"-",shift:"-",zone:"Ufficio Logistica / Ricarica",battery:100,alarm:false,lat:40.9254,lng:14.4550},
-  {id:"z21_1",name:"Zebra TC21 #1",model:"Zebra TC21",operator:"",dept:"-",shift:"-",zone:"Spedizioni / Ribalte",battery:96,alarm:false,lat:40.9259,lng:14.4553},
-  {id:"z21_2",name:"Zebra TC21 #2",model:"Zebra TC21",operator:"",dept:"-",shift:"-",zone:"Ricevimento Merci",battery:82,alarm:false,lat:40.9253,lng:14.4556},
-  {id:"z22_1",name:"Zebra TC22 #1",model:"Zebra TC22",operator:"",dept:"-",shift:"-",zone:"Corsie Picking A-B",battery:90,alarm:false,lat:40.9257,lng:14.4560},
-  {id:"z22_2",name:"Zebra TC22 #2",model:"Zebra TC22",operator:"",dept:"-",shift:"-",zone:"Ufficio Logistica / Ricarica",battery:98,alarm:false,lat:40.9250,lng:14.4551}
+  {id:"p03",name:"Palmare 03",model:"Android 03",operator:"",dept:"-",shift:"-",battery:95,alarm:false,lat:40.9255,lng:14.4552,updated_at:""},
+  {id:"p05",name:"Palmare 05",model:"Android 05",operator:"",dept:"-",shift:"-",battery:88,alarm:false,lat:40.9258,lng:14.4555,updated_at:""},
+  {id:"p06",name:"Palmare 06",model:"Android 06",operator:"",dept:"-",shift:"-",battery:91,alarm:false,lat:40.9252,lng:14.4549,updated_at:""},
+  {id:"p07",name:"Palmare 07",model:"Android 07",operator:"",dept:"-",shift:"-",battery:84,alarm:false,lat:40.9260,lng:14.4558,updated_at:""},
+  {id:"p08",name:"Palmare 08",model:"Android 08",operator:"",dept:"-",shift:"-",battery:79,alarm:false,lat:40.9251,lng:14.4561,updated_at:""},
+  {id:"p13",name:"Palmare 13",model:"Android 13",operator:"",dept:"-",shift:"-",battery:93,alarm:false,lat:40.9256,lng:14.4547,updated_at:""},
+  {id:"p14",name:"Palmare 14",model:"Android 14",operator:"",dept:"-",shift:"-",battery:100,alarm:false,lat:40.9254,lng:14.4550,updated_at:""},
+  {id:"z21_1",name:"Zebra TC21 #1",model:"Zebra TC21",operator:"",dept:"-",shift:"-",battery:96,alarm:false,lat:40.9259,lng:14.4553,updated_at:""},
+  {id:"z21_2",name:"Zebra TC21 #2",model:"Zebra TC21",operator:"",dept:"-",shift:"-",battery:82,alarm:false,lat:40.9253,lng:14.4556,updated_at:""},
+  {id:"z22_1",name:"Zebra TC22 #1",model:"Zebra TC22",operator:"",dept:"-",shift:"-",battery:90,alarm:false,lat:40.9257,lng:14.4560,updated_at:""},
+  {id:"z22_2",name:"Zebra TC22 #2",model:"Zebra TC22",operator:"",dept:"-",shift:"-",battery:98,alarm:false,lat:40.9250,lng:14.4551,updated_at:""}
 ];
-const KEY="candida_p_sb1", CFG="candida_sb_cfg1", TRM="candida_t_sb1";
+const KEY="candida_p_sb1", CFG="candida_sb_cfg1", TRM="candida_t_sb1", LOCK_TRM="candida_t_locked1";
 let devs = JSON.parse(localStorage.getItem(KEY)||"null") || JSON.parse(JSON.stringify(DEF));
-let isAdmin=false, pinAction=null, map=null, markers=[], sb=null, ctx=null, siren=null;
+let isAdmin=false, pinAction=null, map=null, markers=[], sb=null, ctx=null, siren=null, gpsWatchId=null, focusDevId=null;
+
+function ensureLockedDevId(){
+  let tid = localStorage.getItem(TRM);
+  if(!tid || !devs.some(d=>d.id===tid)){
+    tid = devs[0]?.id || "p06";
+    localStorage.setItem(TRM, tid);
+  }
+  return tid;
+}
 
 async function syncRow(d){
   if(!sb) return;
   try{
+    d.updated_at = new Date().toISOString();
     await sb.from("candida_palmari").upsert({
       id:d.id, name:d.name, model:d.model, operator:d.operator||"",
-      dept:d.dept||"-", shift:d.shift||"-", zone:d.zone||"Ufficio Logistica / Ricarica",
+      dept:d.dept||"-", shift:d.shift||"-", zone:d.zone||"-",
       battery:d.battery||100, alarm:!!d.alarm, lat:d.lat||40.9255, lng:d.lng||14.4553,
-      updated_at:new Date().toISOString()
+      updated_at:d.updated_at
     });
   }catch(e){}
 }
@@ -218,25 +212,71 @@ function beep(f){
     if(ctx.state==="suspended") ctx.resume();
     const o=ctx.createOscillator(), g=ctx.createGain();
     o.type="sawtooth"; o.frequency.value=f;
-    g.gain.setValueAtTime(0.4,ctx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.01,ctx.currentTime+0.3);
-    o.connect(g); g.connect(ctx.destination); o.start(); o.stop(ctx.currentTime+0.3);
+    g.gain.setValueAtTime(0.45,ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.01,ctx.currentTime+0.35);
+    o.connect(g); g.connect(ctx.destination); o.start(); o.stop(ctx.currentTime+0.35);
   }catch(e){}
+}
+
+function startGpsLoop(devId){
+  if(!("geolocation" in navigator)) return;
+  if(gpsWatchId!==null) navigator.geolocation.clearWatch(gpsWatchId);
+  gpsWatchId = navigator.geolocation.watchPosition(p=>{
+    const d = devs.find(x=>x.id===devId);
+    if(d){
+      d.lat = p.coords.latitude;
+      d.lng = p.coords.longitude;
+      d.updated_at = new Date().toISOString();
+      document.getElementById("tGps").textContent = `Attivo (${d.lat.toFixed(5)}, ${d.lng.toFixed(5)})`;
+      save(d);
+    }
+  }, ()=>{
+    document.getElementById("tGps").textContent = "Permesso / GPS non disponibile";
+  }, {enableHighAccuracy:true, maximumAge:5000, timeout:15000});
+}
+
+function renderMap(){
+  if(!window.L) return;
+  if(!map){
+    map = L.map("gpsMap").setView([40.9255,14.4553],17);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
+  }
+  markers.forEach(m=>map.removeLayer(m));
+  markers = devs.map(d=>{
+    const m = L.marker([d.lat,d.lng]).addTo(map)
+      .bindPopup(`<strong>${d.name}</strong><br>Operatore: ${d.operator||"Libero"}<br>Stato: ${d.alarm?"IN ALLARME":"OK"}`);
+    m.on("click", ()=>{ focusDevId = d.id; });
+    return m;
+  });
+  if(focusDevId){
+    const target = devs.find(x=>x.id===focusDevId);
+    if(target && target.lat && target.lng){
+      map.setView([target.lat, target.lng], 18);
+      document.getElementById("mapFocusInfo").textContent = `Inquadrato: ${target.name} (${target.operator||"Libero"})`;
+    }
+  }
+  map.invalidateSize();
 }
 
 function render(){
   const ass=devs.filter(d=>d.operator).length;
+  document.getElementById("headerCount").textContent=`${devs.length} Palmari`;
   document.getElementById("kpiTot").textContent=devs.length;
   document.getElementById("kpiAss").textContent=ass;
   document.getElementById("kpiFree").textContent=devs.length-ass;
   document.getElementById("kpiAlm").textContent=devs.filter(d=>d.alarm).length;
+
+  const isPalmareLocked = localStorage.getItem(LOCK_TRM)==="1";
+  document.getElementById("headerControls").classList.toggle("hidden", isPalmareLocked);
+  document.getElementById("viewCentrale").classList.toggle("hidden", isPalmareLocked);
+  document.getElementById("viewPalmare").classList.toggle("hidden", !isPalmareLocked);
 
   const q=document.getElementById("searchBox").value.toLowerCase();
   const f=document.getElementById("statusFilter").value;
   const list=document.getElementById("panelList");
   list.innerHTML="";
   devs.filter(d=>{
-    const m=d.name.toLowerCase().includes(q)||(d.operator||"").toLowerCase().includes(q)||(d.zone||"").toLowerCase().includes(q);
+    const m=d.name.toLowerCase().includes(q)||(d.operator||"").toLowerCase().includes(q);
     if(!m) return false;
     if(f==="assigned") return !!d.operator;
     if(f==="free") return !d.operator;
@@ -252,39 +292,39 @@ function render(){
       </div>
       <div class="mt-2 pt-2 border-t text-xs space-y-1">
         <p>Operatore: <strong>${d.operator||"Disponibile"}</strong></p>
-        <p>Reparto: <span>${d.operator?d.dept+" ("+d.shift+")":"-"}</span></p>
-        <p>Zona: <span class="font-medium">${d.zone}</span></p>
+        <p>Reparto/Turno: <span>${d.operator?d.dept+" ("+d.shift+")":"-"}</span></p>
+        <p>GPS: <span class="font-mono">${Number(d.lat||0).toFixed(5)}, ${Number(d.lng||0).toFixed(5)}</span></p>
       </div>
-      <div class="mt-3 flex gap-2">
+      <div class="mt-3 flex flex-wrap gap-2">
         <button data-act="assign" data-id="${d.id}" type="button" class="flex-1 py-2 bg-blue-600 text-white text-xs font-bold rounded-lg">${d.operator?"Cambia":"Assegna"}</button>
         ${d.operator?`<button data-act="free" data-id="${d.id}" type="button" class="py-2 px-3 bg-slate-200 text-xs font-bold rounded-lg">Libera</button>`:""}
+        <button data-act="locate" data-id="${d.id}" type="button" class="py-2 px-3 bg-emerald-600 text-white text-xs font-bold rounded-lg">📍 GPS</button>
         <button data-act="alarm" data-id="${d.id}" type="button" class="py-2 px-3 ${d.alarm?"bg-slate-900":"bg-rose-600"} text-white text-xs font-bold rounded-lg">${d.alarm?"🔕 Stop":"🔔 Suona"}</button>
         ${isAdmin?`<button data-act="del" data-id="${d.id}" type="button" class="py-2 px-2.5 bg-red-100 text-red-700 text-xs font-bold rounded-lg">🗑️</button>`:""}
       </div>`;
     list.appendChild(el);
   });
 
-  const zones=["Spedizioni / Ribalte","Ricevimento Merci","Corsie Picking A-B","Corsie Picking C-D","Controllo Qualità / Resi","Ufficio Logistica / Ricarica"];
-  const pz=document.getElementById("panelZone");
-  pz.innerHTML=zones.map(z=>{
-    const items=devs.filter(d=>d.zone===z);
-    return `<div class="bg-white p-3.5 rounded-xl border"><h4 class="font-bold text-xs mb-2">${z} (${items.length})</h4><div class="space-y-1.5">${items.map(d=>`<div class="p-2 rounded border text-xs flex justify-between items-center ${d.alarm?"bg-red-50 border-red-500":""}"><span><strong>${d.name}</strong> - ${d.operator||"Libero"}</span><button data-act="alarm" data-id="${d.id}" type="button" class="px-2 py-1 rounded bg-rose-600 text-white text-[11px] font-bold">${d.alarm?"Stop":"Suona"}</button></div>`).join("")||"<p class='text-xs text-slate-400'>Vuoto</p>"}</div></div>`;
-  }).join("");
-
-  const sel=document.getElementById("selTermDev");
-  const tid=localStorage.getItem(TRM)||devs[0]?.id;
-  sel.innerHTML=devs.map(d=>`<option value="${d.id}" ${d.id===tid?"selected":""}>${d.name}</option>`).join("");
-  const cur=devs.find(d=>d.id===sel.value)||devs[0];
+  const tid = ensureLockedDevId();
+  const cur = devs.find(d=>d.id===tid) || devs[0];
   if(cur){
-    document.getElementById("tModel").textContent=cur.model;
-    document.getElementById("tOp").textContent=cur.operator||"Libero";
-    document.getElementById("tZone").textContent=cur.zone;
-    document.getElementById("tZoneChange").value=cur.zone;
-    const vis=!document.getElementById("viewPalmare").classList.contains("hidden");
-    document.getElementById("termCard").classList.toggle("alarm-flash", cur.alarm&&vis);
-    document.getElementById("btnStopAlarmTerm").classList.toggle("hidden", !(cur.alarm&&vis));
-    if(cur.alarm&&vis && !siren){ siren=setInterval(()=>beep(950),500); }
-    if((!cur.alarm||!vis) && siren){ clearInterval(siren); siren=null; }
+    document.getElementById("tName").textContent = cur.name;
+    document.getElementById("tModel").textContent = cur.model;
+    document.getElementById("tOp").textContent = cur.operator || "Libero";
+    document.getElementById("tUpdated").textContent = cur.updated_at ? new Date(cur.updated_at).toLocaleTimeString() : "-";
+    document.getElementById("termCard").classList.toggle("alarm-flash", !!(cur.alarm && isPalmareLocked));
+    document.getElementById("btnStopAlarmTerm").classList.toggle("hidden", !(cur.alarm && isPalmareLocked));
+    if(cur.alarm && isPalmareLocked && !siren){
+      siren = setInterval(()=>beep(950), 500);
+    }
+    if((!cur.alarm || !isPalmareLocked) && siren){
+      clearInterval(siren);
+      siren = null;
+    }
+  }
+
+  if(!document.getElementById("panelMap").classList.contains("hidden")){
+    renderMap();
   }
 }
 
@@ -298,9 +338,16 @@ document.addEventListener("click",async e=>{
     document.getElementById("aTitle").textContent=d.name;
     document.getElementById("aOp").value=d.operator||"";
     document.getElementById("modalAssign").classList.remove("hidden");
-  }else if(b.dataset.act==="free"){ d.operator=""; d.dept="-"; d.shift="-"; save(d); }
-  else if(b.dataset.act==="alarm"){ d.alarm=!d.alarm; if(d.alarm) beep(950); save(d); }
-  else if(b.dataset.act==="del" && isAdmin){
+  }else if(b.dataset.act==="free"){
+    d.operator=""; d.dept="-"; d.shift="-"; save(d);
+  }else if(b.dataset.act==="locate"){
+    focusDevId = d.id;
+    setTab("map");
+  }else if(b.dataset.act==="alarm"){
+    d.alarm=!d.alarm;
+    if(d.alarm) beep(950);
+    save(d);
+  }else if(b.dataset.act==="del" && isAdmin){
     devs=devs.filter(x=>x.id!==d.id);
     if(sb) try{ await sb.from("candida_palmari").delete().eq("id",d.id); }catch(err){}
     save();
@@ -313,7 +360,6 @@ document.getElementById("btnSaveAssign").onclick=()=>{
     d.operator=document.getElementById("aOp").value.trim();
     d.dept=document.getElementById("aDept").value;
     d.shift=document.getElementById("aShift").value;
-    d.zone=document.getElementById("aZone").value;
     save(d);
   }
   document.getElementById("modalAssign").classList.add("hidden");
@@ -353,62 +399,50 @@ document.getElementById("btnExitAdmin").onclick=()=>{
 document.getElementById("btnReset11").onclick=()=>{ devs=JSON.parse(JSON.stringify(DEF)); save(); };
 document.getElementById("btnAddDev").onclick=()=>{
   const n="Palmare "+(devs.length+1);
-  const nd={id:"d_"+Date.now(),name:n,model:"Android",operator:"",dept:"-",shift:"-",zone:"Ufficio Logistica / Ricarica",battery:100,alarm:false,lat:40.9255,lng:14.4553};
+  const nd={id:"d_"+Date.now(),name:n,model:"Android",operator:"",dept:"-",shift:"-",battery:100,alarm:false,lat:40.9255,lng:14.4553,updated_at:""};
   devs.push(nd);
   save(nd);
 };
 
 document.getElementById("btnPalmare").onclick=()=>{
-  document.getElementById("viewCentrale").classList.add("hidden");
-  document.getElementById("viewPalmare").classList.remove("hidden");
+  const currentSel = localStorage.getItem(TRM) || "p06";
+  localStorage.setItem(TRM, currentSel);
+  localStorage.setItem(LOCK_TRM, "1");
+  startGpsLoop(currentSel);
   render();
 };
-document.getElementById("btnCloseTerm").onclick=()=>askPin(()=>{
-  document.getElementById("viewPalmare").classList.add("hidden");
-  document.getElementById("viewCentrale").classList.remove("hidden");
-  render();
-});
 document.getElementById("btnCentrale").onclick=()=>{
-  if(!document.getElementById("viewPalmare").classList.contains("hidden")) document.getElementById("btnCloseTerm").click();
+  localStorage.removeItem(LOCK_TRM);
+  render();
 };
-document.getElementById("selTermDev").onchange=e=>{ localStorage.setItem(TRM,e.target.value); render(); };
-document.getElementById("tZoneChange").onchange=e=>{
-  const d=devs.find(x=>x.id===document.getElementById("selTermDev").value);
-  if(d){ d.zone=e.target.value; save(d); }
-};
+
 document.getElementById("btnEnableSensors").onclick=()=>{
   beep(880);
-  if("geolocation" in navigator){
-    navigator.geolocation.watchPosition(p=>{
-      const d=devs.find(x=>x.id===document.getElementById("selTermDev").value);
-      if(d){ d.lat=p.coords.latitude; d.lng=p.coords.longitude; document.getElementById("tGps").textContent="Attivo ✓"; save(d); }
-    });
-  }
+  const tid = ensureLockedDevId();
+  startGpsLoop(tid);
   if("getBattery" in navigator){
     navigator.getBattery().then(b=>{
-      const d=devs.find(x=>x.id===document.getElementById("selTermDev").value);
+      const d=devs.find(x=>x.id===tid);
       if(d){ d.battery=Math.round(b.level*100); save(d); }
     });
   }
 };
 document.getElementById("btnStopAlarmTerm").onclick=()=>{
-  const d=devs.find(x=>x.id===document.getElementById("selTermDev").value);
+  const tid = ensureLockedDevId();
+  const d=devs.find(x=>x.id===tid);
   if(d){ d.alarm=false; save(d); }
 };
 
 function setTab(t){
   document.getElementById("panelList").classList.toggle("hidden",t!=="list");
-  document.getElementById("panelZone").classList.toggle("hidden",t!=="zone");
   document.getElementById("panelMap").classList.toggle("hidden",t!=="map");
+  document.getElementById("tabList").className = t==="list" ? "px-3 py-2 text-xs font-bold rounded-lg bg-slate-900 text-white" : "px-3 py-2 text-xs font-bold rounded-lg bg-slate-200 text-slate-700";
+  document.getElementById("tabMap").className = t==="map" ? "px-3 py-2 text-xs font-bold rounded-lg bg-slate-900 text-white" : "px-3 py-2 text-xs font-bold rounded-lg bg-slate-200 text-slate-700";
   if(t==="map"){
-    setTimeout(()=>{
-      if(!map && window.L){ map=L.map("gpsMap").setView([40.9255,14.4553],17); L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map); }
-      if(map){ markers.forEach(m=>map.removeLayer(m)); markers=devs.map(d=>L.marker([d.lat,d.lng]).addTo(map).bindPopup(d.name+" ("+(d.operator||"Libero")+")")); map.invalidateSize(); }
-    },150);
+    setTimeout(renderMap, 120);
   }
 }
 document.getElementById("tabList").onclick=()=>setTab("list");
-document.getElementById("tabZone").onclick=()=>setTab("zone");
 document.getElementById("tabMap").onclick=()=>setTab("map");
 document.getElementById("searchBox").oninput=render;
 document.getElementById("statusFilter").onchange=render;
@@ -476,8 +510,20 @@ async function initSb(cfg){
 
 const p=new URLSearchParams(location.search);
 if(p.has("sb")){ try{ localStorage.setItem(CFG,decodeURIComponent(atob(p.get("sb")))); }catch(e){} }
+if(p.has("dev")){
+  const qDev = p.get("dev").toLowerCase();
+  const matched = devs.find(x=>x.id.toLowerCase()===qDev || x.name.toLowerCase()===qDev);
+  if(matched){
+    localStorage.setItem(TRM, matched.id);
+    localStorage.setItem(LOCK_TRM, "1");
+  }
+}
 const sc=localStorage.getItem(CFG);
 if(sc){ try{ initSb(JSON.parse(sc)); }catch(e){} }
+
+if(localStorage.getItem(LOCK_TRM)==="1"){
+  startGpsLoop(ensureLockedDevId());
+}
 
 render();
 </script>
