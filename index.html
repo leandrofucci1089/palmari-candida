@@ -587,8 +587,9 @@ if(p.has("dev")){
     localStorage.setItem(LOCK_TRM, "1");
   }
 }
+const DEFCFG={url:'https://mhnrsznxrohpgjelunjj.supabase.co',key:'sb_publishable_n9iHkNj__gNVlihuhlMETw_O7_UxMab'};
 const sc=localStorage.getItem(CFG);
-if(sc){ try{ initSb(JSON.parse(sc)); }catch(e){} }
+try{ initSb(sc?JSON.parse(sc):DEFCFG); }catch(e){}
 
 if(localStorage.getItem(LOCK_TRM)==="1"){
   startGpsLoop(ensureLockedDevId());
