@@ -1,6 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
+GRADLE_OPTS="${GRADLE_OPTS:-}"
 APP_HOME=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
 CLASSPATH="$APP_HOME/gradle/wrapper/gradle-wrapper.jar"
 
@@ -22,4 +23,4 @@ if [ ! -f "$CLASSPATH" ]; then
   rm -rf "$TMP_ZIP" /tmp/gradle-dist
 fi
 
-exec "$JAVACMD" $GRADLE_OPTS -classpath "$CLASSPATH" org.gradle.wrapper.GradleWrapperMain "$@"
+exec "$JAVACMD" ${GRADLE_OPTS:-} -classpath "$CLASSPATH" org.gradle.wrapper.GradleWrapperMain "$@"
