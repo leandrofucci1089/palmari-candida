@@ -79,9 +79,12 @@
 
 <main id="viewPalmare" class="hidden flex-1 flex items-center justify-center p-4">
   <div id="termCard" class="w-full max-w-md bg-white rounded-2xl shadow-xl border p-6 space-y-4 text-center">
-    <div class="border-b pb-3">
-      <span class="text-xs font-bold text-blue-600 uppercase tracking-wider">Dispositivo Bloccato • Solo Allarme &amp; GPS</span>
-      <h2 id="tName" class="text-2xl font-black text-slate-900 mt-1">-</h2>
+    <div class="flex items-center justify-between gap-2 border-b pb-3 text-left">
+      <div>
+        <span class="text-xs font-bold text-blue-600 uppercase tracking-wider">Dispositivo Bloccato • Solo Allarme &amp; GPS</span>
+        <h2 id="tName" class="text-2xl font-black text-slate-900 mt-0.5">-</h2>
+      </div>
+      <button id="btnAdminUnlockTerm" type="button" title="Sblocca dispositivo con PIN Admin" class="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-amber-100 text-slate-600 hover:text-amber-800 border text-xs font-bold shrink-0">🔓 Sblocca (Admin)</button>
     </div>
     <div class="bg-slate-50 rounded-xl p-4 border text-left text-sm space-y-2 text-slate-800">
       <p>Modello: <strong id="tModel">-</strong></p>
@@ -182,6 +185,27 @@ function ensureLockedDevId(){
     localStorage.setItem(TRM, tid);
   }
   return tid;
+}
+
+function unlockDeviceToAdmin(){
+  localStorage.removeItem(LOCK_TRM);
+  if(gpsWatchId!==null){
+    navigator.geolocation.clearWatch(gpsWatchId);
+    gpsWatchId = null;
+  }
+  if(siren){
+    clearInterval(siren);
+    siren = null;
+  }
+  const cleanUrl = new URL(location.href);
+  if(cleanUrl.searchParams.has("dev")){
+    cleanUrl.searchParams.delete("dev");
+    history.replaceState({}, "", cleanUrl.toString());
+  }
+  isAdmin = true;
+  document.getElementById("adminBar").classList.remove("hidden");
+  document.getElementById("roleBadge").textContent = "Amministratore";
+  render();
 }
 
 async function syncRow(d){
@@ -389,6 +413,9 @@ document.getElementById("btnAdmin").onclick=()=>{
     document.getElementById("roleBadge").textContent="Amministratore";
     render();
   });
+};
+document.getElementById("btnAdminUnlockTerm").onclick=()=>{
+  askPin(unlockDeviceToAdmin);
 };
 document.getElementById("btnExitAdmin").onclick=()=>{
   isAdmin=false;
