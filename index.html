@@ -595,6 +595,27 @@ if(localStorage.getItem(LOCK_TRM)==="1"){
   startGpsLoop(ensureLockedDevId());
 }
 
+// Schermo sempre acceso sul palmare bloccato (Wake Lock) e ripresa GPS quando l'app torna in primo piano
+let wakeLock=null;
+async function keepAwake(){
+  try{
+    if("wakeLock" in navigator && document.visibilityState==="visible" && !wakeLock){
+      wakeLock=await navigator.wakeLock.request("screen");
+      wakeLock.addEventListener("release",()=>{ wakeLock=null; });
+    }
+  }catch(e){}
+}
+if(localStorage.getItem(LOCK_TRM)==="1"){
+  keepAwake();
+  document.addEventListener("click",keepAwake);
+  document.addEventListener("visibilitychange",()=>{
+    if(document.visibilityState==="visible" && localStorage.getItem(LOCK_TRM)==="1"){
+      keepAwake();
+      startGpsLoop(ensureLockedDevId());
+    }
+  });
+}
+
 const sbInput = document.getElementById("searchBox");
 function unlockAndClearSearch() {
   sbInput.removeAttribute("readonly");
